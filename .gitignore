@@ -1,0 +1,10 @@
+venv/
+data/
+models/
+output_model/
+__pycache__/
+*.pyc
+*.wav
+*.flac
+*.mp3
+.ipynb_checkpoints/
