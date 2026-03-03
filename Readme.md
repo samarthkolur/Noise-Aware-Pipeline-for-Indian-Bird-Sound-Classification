@@ -92,10 +92,10 @@ to BirdNET for fine-tuning or inference without any content validation.
 
 ```mermaid
 flowchart TD
-    A["IBC53 Raw Audio"] --> B["Resample to 48kHz"]
+    A["IBC53 Raw Audio"] --> B["Resample to 48 kHz"]
     B --> C["3s Fixed Segmentation"]
-    C --> D["All Segments Labeled as Species"]
-    D --> E["BirdNET Finetuning and Inference"]
+    C --> D["All Segments Used for Species Training"]
+    D --> E["BirdNET Fine-tuning and Inference"]
     E --> F["Predictions"]
 ```
 
@@ -107,15 +107,15 @@ excluded from training data.
 
 ```mermaid
 flowchart TD
-    A["IBC53 Raw Audio"] --> B["Resample to 48kHz"]
+    A["IBC53 Raw Audio"] --> B["Resample to 48 kHz"]
     B --> C["Per-file RMS Normalization"]
     C --> D["3s Fixed Segmentation"]
     D --> E["0.5s Subframe Feature Extraction"]
-    E --> F["Noise Score Computation"]
+    E --> F["Noise Score Computation Weighted Features"]
     F --> G{"Subframe Majority Vote"}
-    G -->|"Bird"| H["Bird Segment"]
-    G -->|"Noise"| I["Noise Segment Discarded"]
-    H --> J["BirdNET Finetuning and Inference"]
+    G -->|"Bird"| H["Bird Folder - Used for Species Training"]
+    G -->|"Noise"| I["Noise Folder - Optional Noise Class or Evaluation"]
+    H --> J["BirdNET Fine-tuning and Inference"]
     J --> K["Predictions"]
 ```
 
