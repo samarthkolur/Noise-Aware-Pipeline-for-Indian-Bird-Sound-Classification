@@ -7,6 +7,11 @@ TRAIN_RATIO = 0.8
 
 for label in ["bird", "noise"]:
     label_path = os.path.join(SOURCE_DIR, label)
+
+    if not os.path.isdir(label_path):
+        print(f"[INFO] Skipping label '{label}' — folder not found.")
+        continue
+
     files = os.listdir(label_path)
     random.shuffle(files)
 

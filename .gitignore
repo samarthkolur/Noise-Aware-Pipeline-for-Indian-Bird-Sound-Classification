@@ -1,10 +1,26 @@
-venv/
+# ─── Dataset and audio ────────────────────────────────────────────────────────
 data/
-models/
-output_model/
-__pycache__/
-*.pyc
 *.wav
 *.flac
 *.mp3
+*.zip
+
+# ─── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
 .ipynb_checkpoints/
+
+# ─── Virtual environment ──────────────────────────────────────────────────────
+venv/
+.env/
+env/
+
+# ─── OS artifacts ─────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ─── Models and outputs ───────────────────────────────────────────────────────
+models/
+output_model/
