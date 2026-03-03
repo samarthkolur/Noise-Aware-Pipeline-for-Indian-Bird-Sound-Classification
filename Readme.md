@@ -16,6 +16,37 @@ proposed and evaluated against a no-filtering baseline to quantify this effect.
 
 ---
 
+## Project Phases
+
+### Phase 1 — Noise-Aware Preprocessing (Completed)
+
+| Step | Description |
+|------|-------------|
+| Dataset ingestion | Download IBC53 via Kaggle CLI, validate structure, auto-flatten nested folders |
+| 48 kHz resampling | Standardize all recordings to 48 kHz using librosa |
+| Per-file RMS normalization | Scale each recording so 95th-percentile RMS equals a fixed reference level |
+| 3-second segmentation | Split normalized audio into fixed non-overlapping 3-second windows |
+| Sub-frame feature extraction | Divide each segment into six 0.5-second sub-frames; compute RMS, ZCR, Spectral Flatness, Centroid, Autocorrelation |
+| Noise Segregation V2 | Score each sub-frame with a weighted noise model; apply majority voting to classify segment as bird or noise |
+| Statistical calibration | Sample feature distributions across the dataset to validate threshold settings before full segmentation |
+| Post-segmentation analysis | Compare bird vs noise feature distributions using overlay histograms to verify separation quality |
+| Segmentation reporting | Export per-species routing summary (bird count, noise count, bird ratio) as CSV |
+
+**Results:** 14,535 segments produced from 1,368 recordings — 91.2% bird, 8.8% noise.
+
+### Phase 2 — Noise-Aware BirdNET Fine-Tuning (Planned)
+
+| Step | Description |
+|------|-------------|
+| Baseline training | Fine-tune BirdNET classification head on raw, unfiltered 3-second segments (Pipeline A) |
+| Filtered training | Fine-tune on bird-only segments from Noise Segregation V2 output (Pipeline B) |
+| Noise class training | Fine-tune with an additional noise class using rejected segments (Pipeline C) |
+| False positive evaluation | Measure species prediction rate on pure-noise audio for each pipeline |
+| SNR robustness testing | Evaluate accuracy degradation at 0, 5, and 10 dB signal-to-noise ratio |
+| Hybrid architecture exploration | Investigate CNN binary classifier as a learned replacement for the rule-based noise scoring stage |
+
+---
+
 ## Problem Statement
 
 BirdNET is a pre-trained deep learning model for bird species identification
