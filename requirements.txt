@@ -13,6 +13,17 @@ seaborn>=0.12
 
 # Machine Learning
 scikit-learn>=1.3
+joblib>=1.3
+
+# Deep Learning - PyTorch (MLP classifier, Autoencoder OOD)
+torch>=2.0
+
+# Deep Learning - TensorFlow (YAMNet embeddings)
+tensorflow>=2.13
+tensorflow-hub>=0.14
+
+# OpenL3 embeddings
+openl3>=0.4
 
 # BirdNET inference
 birdnet>=0.3
