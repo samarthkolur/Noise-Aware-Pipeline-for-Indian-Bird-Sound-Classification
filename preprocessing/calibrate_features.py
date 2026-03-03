@@ -10,8 +10,8 @@ import matplotlib
 matplotlib.use("Agg")   # non-interactive backend — safe on Windows without display
 import matplotlib.pyplot as plt
 
-# ─── Add project root to path so we can reuse segment_audio helpers ──────────
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "segmentation"))
+# ─── Reuse feature functions from segment_audio ───────────────────────────────
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import segment_audio as seg
 
 # ─── Configuration ────────────────────────────────────────────────────────────

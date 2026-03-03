@@ -11,7 +11,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 # ─── Reuse feature functions from segment_audio ───────────────────────────────
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "segmentation"))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import segment_audio as seg
 
 # ─── Configuration ────────────────────────────────────────────────────────────
