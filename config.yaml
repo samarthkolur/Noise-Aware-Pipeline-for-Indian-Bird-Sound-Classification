@@ -1,0 +1,116 @@
+# ============================================================
+#  Bioacoustic Pipeline — Central Configuration
+# ============================================================
+
+project:
+  name: bioacoustic_pipeline
+  seed: 42
+  device: auto          # auto | cpu | cuda
+
+# ── Data ─────────────────────────────────────────────────────
+data:
+  raw_dir: ./iBC53
+  processed_dir: ./data/processed
+  embeddings_dir: ./data/embeddings
+  output_dir: ./outputs
+
+# ── Audio / Preprocessing ───────────────────────────────────
+audio:
+  sample_rate: 48000
+  segment_duration_s: 3.0
+  overlap: 0.0          # 0.0 = non-overlapping (preprocessing default)
+  mono: true
+
+# ── Feature Extraction ──────────────────────────────────────
+features:
+  type: mel_spectrogram   # mel_spectrogram | mfcc
+  n_fft: 2048
+  hop_length: 512
+  n_mels: 128
+  f_min: 150
+  f_max: 15000
+
+# ── Noise Reduction ────────────────────────────────────────
+noise_reduction:
+  enabled: true
+  method: spectral_gating  # spectral_gating | bandpass
+  spectral_gating:
+    n_std_thresh: 1.5
+    prop_decrease: 1.0
+  bandpass:
+    low_freq: 150
+    high_freq: 15000
+
+# ── Silence Removal (RMS-based) ────────────────────────────
+silence_removal:
+  enabled: true
+  rms_threshold_db: -40.0   # segments below this RMS (dB) are dropped
+
+# ── Embedding Model ────────────────────────────────────────
+embedding:
+  model_name: birdnet          # birdnet | placeholder
+  embedding_dim: 1024          # 1024 (BirdNET V2.4 penultimate layer)
+  birdnet_model_path: auto     # 'auto' = detect from birdnetlib, or set explicit .tflite path
+  batch_size: 64
+  num_workers: 4
+  storage_format: hdf5        # hdf5 (per-species .h5 + manifest.csv)
+
+# ── Dataset & DataLoader ───────────────────────────────────
+dataset:
+  val_split: 0.15
+  test_split: 0.10
+  stratify: true
+  augmentation:
+    enabled: true
+    time_shift_ms: 100
+    noise_snr_db: [5, 15]
+    frequency_mask: 10
+
+# ── Model Architecture ─────────────────────────────────────
+model:
+  type: classifier         # classifier
+  binary: true             # true (BCE) or false (CrossEntropy)
+  num_classes: 53          # ignored if binary=true
+  hidden_dims: [512, 256]
+  dropout: 0.3
+
+# ── Training ───────────────────────────────────────────────
+training:
+  epochs: 50
+  batch_size: 32
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  scheduler: cosine        # cosine | step | plateau
+  early_stopping:
+    enabled: true
+    patience: 7
+    min_delta: 0.001
+  loss: focal              # cross_entropy | focal | label_smoothing
+  focal_loss:
+    gamma: 2.0
+    alpha: null
+  label_smoothing: 0.1
+  checkpoint_dir: ./checkpoints
+  log_dir: ./logs
+
+# ── Inference ──────────────────────────────────────────────
+inference:
+  checkpoint: ./checkpoints/best_model.pt
+  confidence_threshold: auto    # 'auto' = use optimal from training, or float (e.g. 0.5)
+  high_threshold: 0.7           # above this → confident bird
+  low_threshold: 0.3            # below this → confident noise
+  # between low and high → uncertain (routed to outputs/uncertain/)
+  top_k: 3
+  temporal_smoothing:
+    enabled: true
+    window_size: 5
+
+# ── Mining / Active Learning ──────────────────────────────
+mining:
+  hard_negatives:
+    enabled: true
+    k_neighbours: 10
+    distance_metric: cosine
+  active_learning:
+    strategy: uncertainty     # uncertainty | margin | entropy
+    query_budget: 100

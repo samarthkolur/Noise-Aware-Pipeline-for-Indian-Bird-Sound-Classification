@@ -1,0 +1,36 @@
+# ── Python ──────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+dist/
+build/
+.venv/
+venv/
+env/
+
+# ── Data & Models (large files) ─────────────
+data/
+iBC53/
+outputs/
+checkpoints/
+logs/
+models/birdnet/
+
+# ── IDE / OS ────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ── Jupyter ─────────────────────────────────
+.ipynb_checkpoints/
+
+# ── Misc ────────────────────────────────────
+*.log
+*.h5
+*.hdf5
+*.tflite
