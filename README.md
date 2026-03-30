@@ -1,91 +1,186 @@
-# Bioacoustic Noise Segregation Pipeline
+# Noise-Aware Pipeline for Indian Bird Sound Classification
 
-A production-ready, PyTorch-based machine learning pipeline designed to segregate clean bird vocalizations from background noise. Built with a modular, data-centric architecture, this pipeline supports automated preprocessing, high-dimensional embedding extraction (e.g., BirdNET), downstream classification, and active learning/hard-negative mining.
+A production-ready, data-centric ML pipeline that segregates clean bird vocalizations from background noise using **BirdNET V2.4** embeddings. Supports automated preprocessing, 1024-dimensional embedding extraction, binary classification with optimized thresholds, three-class inference routing (bird / noise / uncertain), and active learning through hard-negative and false-negative mining.
 
-## Architecture & Pipeline Explanation
+## Pipeline Architecture
 
-The workflow is divided into five distinct stages, all orchestrated by `run_pipeline.py` and configured centrally via `config.yaml`.
+```
+Raw Audio → Preprocessing → BirdNET Embeddings → Classifier → Routing
+                                                      ↓
+                                              ┌───────┼───────┐
+                                          clean_birds  uncertain  noise
+                                                          ↓
+                                                   Manual Review
+                                                          ↓
+                                                  Dataset Update → Retrain
+```
 
-1. **Preprocessing (`--stage preprocess`)**
-   Takes raw audio of any length from `data/raw/`, resamples it strictly to 48 kHz mono, and chops it into non-overlapping 3-second segments. Built-in RMS-thresholding automatically drops completely silent segments. Outputs `.wav` files and rich `.json` metadata sidecars to `data/processed/`.
+### Stages
 
-2. **Embedding Extraction (`--stage embed`)**
-   Loads the 3s segments and passes them through a heavy feature encoder (like BirdNET or a custom CNN). The 1024D floating-point embeddings are extracted and stored efficiently in a compressed HDF5 dataset (`data/embeddings/`) partitioned by species, alongside an auto-generated `manifest.csv` index tracker for O(1) dataloading.
-
-3. **Training (`--stage train`)**
-   Trains a lightweight Multi-Layer Perceptron (MLP) classification head natively on the HDF5 embeddings. Supports both Binary Classification (`BCEWithLogitsLoss` for Bird vs. Noise) and Multiclass paradigms. Features automatic inverse-frequency class weighting, AdamW optimization, Cosine Annealing learning rates, early stopping, and automatic checkpointing to `checkpoints/`.
-
-4. **Inference (`--stage infer`)**
-   An end-to-end evaluation engine. You point it at a raw audio file or directory; it safely segments the audio in a secure memory tempfile, extracts embeddings, runs the trained MLP classifier, and automatically routes the resulting 3s `.wav` segments (with their metadata tracking `.json`) into `outputs/clean_birds/` or `outputs/noise/` based on confidence logic.
-
-5. **Mining / Active Learning (`--stage mine`)**
-   A specialized loop for identifying False Positives (e.g., wind noise masquerading as a bird). It uses the inference engine to export high-confidence target predictions out of known-noise directories into a manual `review/` folder. After human verification, `Miner.update_dataset()` dynamically resizes the core `embeddings.h5` database, appending the new verified hard negatives and updating the `manifest.csv` for immediate iterative retraining.
-
----
-
-## Setup Instructions
-
-1. **Environment Setup**
-   It is highly recommended to use a virtual environment (`venv` or `conda`).
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate
-   ```
-
-2. **Install Dependencies**
-   Install the required Python packages:
-   ```bash
-   pip install -r requirements.txt
-   ```
-   *(Note: The `soundfile` library is used natively for robust, cross-platform `.wav` audio I/O.)*
-
-3. **Data Preparation**
-   Place your raw audio files organized by species folder inside the raw directory configured in `config.yaml` (default: `data/raw/`).
-   ```text
-   data/raw/
-   ├── Cyornis unicolor/
-   │   ├── XC12345.wav
-   │   └── XC67890.wav
-   └── noise/
-       └── wind_01.wav
-   ```
+| Stage | Command | Description |
+|-------|---------|-------------|
+| **1. Preprocess** | `--stage preprocess` | Resample to 48 kHz mono, segment into 3s chunks, drop silent segments (RMS threshold) |
+| **2. Embed** | `--stage embed` | Extract 1024D embeddings from BirdNET V2.4 penultimate layer → HDF5 |
+| **3. Train** | `--stage train` | Train MLP classifier (BCE/CE), F1-based checkpointing, auto-threshold optimization |
+| **4. Infer** | `--stage infer` | Three-class routing: `clean_birds/` / `noise/` / `uncertain/` |
+| **5. Evaluate** | `--stage evaluate` | Confusion matrix, threshold curve, recall-at-precision analysis |
+| **6. Mine** | `--stage mine` | False positive + false negative mining for active learning |
 
 ---
 
-## Commands
+## Setup
 
-The pipeline is completely config-driven. Ensure your parameters match your environment in `config.yaml`, then execute `run_pipeline.py`.
+### 1. Environment
 
-### Run the Full Pipeline
-Executes Preprocessing → Embedding → Training → Inference continuously:
+```bash
+python -m venv .venv
+source .venv/bin/activate  # Linux/Mac
+# .venv\Scripts\activate   # Windows
+```
+
+### 2. Install Dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+> **Note:** `birdnetlib` ships the official BirdNET V2.4 TFLite model (~50 MB). The `ai-edge-litert` package provides the TFLite runtime for Python 3.12+.
+
+### 3. Data Preparation
+
+Place raw audio files organized by species inside the directory set in `config.yaml` (default: `iBC53/`):
+
+```
+iBC53/
+├── Cyornis unicolor/
+│   ├── 1.wav
+│   └── 2.wav
+├── Parus cinereus/
+│   └── 1.wav
+└── noise/           ← optional noise class
+    └── wind_01.wav
+```
+
+---
+
+## Usage
+
+### Full Pipeline
+
+Runs all stages sequentially (preprocess → embed → train → infer → evaluate → mine):
+
 ```bash
 python run_pipeline.py --config config.yaml
 ```
 
-### Run Individual Stages
-If you only need to run a specific part of the pipeline:
+### Individual Stages
 
-**1. Preprocess audio:**
 ```bash
-python run_pipeline.py --stage preprocess
+# Preprocess: segment + resample + silence removal
+python run_pipeline.py --config config.yaml --stage preprocess
+
+# Embed: extract BirdNET 1024D embeddings → HDF5
+python run_pipeline.py --config config.yaml --stage embed
+
+# Train: MLP classifier with F1-based checkpointing
+python run_pipeline.py --config config.yaml --stage train
+
+# Infer: three-class routing (bird / noise / uncertain)
+python run_pipeline.py --config config.yaml --stage infer
+
+# Evaluate: confusion matrix + threshold analysis
+python run_pipeline.py --config config.yaml --stage evaluate
+
+# Mine: false positive + false negative mining
+python run_pipeline.py --config config.yaml --stage mine
 ```
 
-**2. Extract embeddings:**
+### Standalone Evaluation
+
 ```bash
-python run_pipeline.py --stage embed
+python evaluate.py --config config.yaml
 ```
 
-**3. Train classifier:**
-```bash
-python run_pipeline.py --stage train
+Outputs:
+- Confusion matrix at default and optimal thresholds
+- Precision / Recall / F1 at each threshold
+- Recall-at-minimum-precision sweep
+- Probability distribution per class
+
+---
+
+## Configuration
+
+All parameters are in `config.yaml`. Key settings:
+
+```yaml
+embedding:
+  model_name: birdnet         # birdnet | placeholder
+  birdnet_model_path: auto    # 'auto' = detect from birdnetlib
+
+model:
+  binary: true                # true = bird/noise, false = per-species
+
+inference:
+  confidence_threshold: auto  # 'auto' = use optimal from training
+  high_threshold: 0.7         # above → bird
+  low_threshold: 0.3          # below → noise
+                              # between → uncertain
 ```
 
-**4. Run End-to-End Inference:**
-```bash
-python run_pipeline.py --stage infer
+---
+
+## Three-Class Routing
+
+Instead of a hard binary decision, inference uses **three confidence bands**:
+
+| Probability | Decision | Destination |
+|-------------|----------|-------------|
+| `prob > high_threshold` (0.7) | **Bird** | `outputs/clean_birds/` |
+| `prob < low_threshold` (0.3) | **Noise** | `outputs/noise/` |
+| Between thresholds | **Uncertain** | `outputs/uncertain/` |
+
+The `uncertain/` folder is designed for **manual review** — listen to these segments and move confirmed birds to a verified directory, then run `miner.update_dataset()` to retrain.
+
+---
+
+## Active Learning Loop
+
+```
+1. Train → Infer → Evaluate
+2. Review outputs/uncertain/ and outputs/noise/
+3. Move verified birds to verified_birds/
+4. Run: miner.update_dataset(verified_dir, target_species="<species>")
+5. Retrain → repeat
 ```
 
-**5. Hard-Negative Mining (Extracting False Positives):**
-```bash
-python run_pipeline.py --stage mine
+The mining stage automates step 2 by scanning `noise/` for potential false negatives (bird sounds misclassified as noise) and exporting them to `outputs/false_negatives/` for review.
+
+---
+
+## Project Structure
+
 ```
+├── config.yaml              # Central configuration
+├── run_pipeline.py          # CLI entry-point (all stages)
+├── evaluate.py              # Standalone evaluation script
+├── requirements.txt
+│
+├── preprocessing/           # Audio loading, segmentation, silence removal
+├── embedding/               # BirdNET TFLite encoder, HDF5 storage
+├── dataset/                 # PyTorch Dataset, splits, class weighting
+├── models/                  # MLP classifier architecture
+├── training/                # Training loop, metrics, threshold optimization
+├── inference/               # Three-class predictor + routing
+├── mining/                  # False positive/negative mining, dataset update
+└── utils/                   # Config loader, logger
+```
+
+---
+
+## Key Technical Details
+
+- **BirdNET V2.4**: Embeddings extracted from the penultimate `GLOBAL_AVG_POOL` layer (1024D) via TFLite with XNNPACK disabled for intermediate tensor access
+- **F1-Based Checkpointing**: Model checkpoints are saved based on best validation F1 (not val_loss) for recall-sensitive tasks
+- **Optimal Threshold**: After training, the pipeline sweeps 50 threshold candidates and saves the F1-optimal threshold to `best_model_meta.json`
+- **Audio Backend**: Uses `soundfile` (not torchaudio) for cross-platform robustness without FFmpeg dependency

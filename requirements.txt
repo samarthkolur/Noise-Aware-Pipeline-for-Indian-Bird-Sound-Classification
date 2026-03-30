@@ -1,6 +1,10 @@
-# ── Core ──────────────────────────────────────────
+# ── Core ML ───────────────────────────────────────
 torch>=2.0.0
 torchaudio>=2.0.0
+
+# ── BirdNET Embedding Model ──────────────────────
+birdnetlib>=0.15.0          # Ships BirdNET V2.4 TFLite model
+ai-edge-litert>=1.0.0       # TFLite runtime for Python 3.12+
 
 # ── Audio & Signal Processing ─────────────────────
 librosa>=0.10.0
