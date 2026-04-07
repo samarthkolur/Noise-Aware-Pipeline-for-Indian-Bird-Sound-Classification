@@ -1,6 +1,1 @@
-"""training — Model training, loss functions, and evaluation metrics."""
-
-from .trainer import Trainer
-from .metrics import compute_metrics
-
-__all__ = ["Trainer", "compute_metrics"]
+"""Training: metrics, trainer (see run_pipeline --stage train)."""

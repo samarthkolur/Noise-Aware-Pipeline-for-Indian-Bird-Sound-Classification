@@ -19,12 +19,30 @@ Raw Audio → Preprocessing → BirdNET Embeddings → Classifier → Routing
 
 | Stage | Command | Description |
 |-------|---------|-------------|
-| **1. Preprocess** | `--stage preprocess` | Resample to 48 kHz mono, segment into 3s chunks, drop silent segments (RMS threshold) |
+| **1. Preprocess** | `--stage preprocess` | Resample to 48 kHz mono, 3s chunks, RMS silence drop; optional **V2** routing (`pipeline.mode`) |
 | **2. Embed** | `--stage embed` | Extract 1024D embeddings from BirdNET V2.4 penultimate layer → HDF5 |
 | **3. Train** | `--stage train` | Train MLP classifier (BCE/CE), F1-based checkpointing, auto-threshold optimization |
 | **4. Infer** | `--stage infer` | Three-class routing: `clean_birds/` / `noise/` / `uncertain/` |
-| **5. Evaluate** | `--stage evaluate` | Confusion matrix, threshold curve, recall-at-precision analysis |
+| **5. Evaluate** | `--stage evaluate` | Text metrics: confusion matrix, threshold curve, recall-at-precision (`evaluate.py`) |
 | **6. Mine** | `--stage mine` | False positive + false negative mining for active learning |
+
+After training, optionally run **`evaluate_visual.py`** (not part of `run_pipeline`) to save **plots** — see [Standalone evaluation](#standalone-evaluation) below.
+
+### Pipeline modes (`pipeline.mode` in `config.yaml`)
+
+| Mode | V2 scoring | Processed outputs | Typical use |
+|------|------------|-------------------|-------------|
+| **baseline** | Off | One folder per raw species; optional manual `noise/` | Classic BirdNET + MLP; you supply non-bird audio in `raw_dir/noise/` if you need class 0 |
+| **filtered** | On; **drops** V2-noise segments | Only V2-bird segments under each species folder | Cleaner species embeddings; **do not** treat binary metrics as a noise-rejection benchmark unless you add a separate noise test set |
+| **full** | On; **routes** V2-noise to `processed_dir/noise/` | Species folders + auto-filled `noise/` | Bird vs noise **without** manual noise clips; embeddings get both classes for valid binary evaluation |
+
+Preprocessing order: **segment → RMS silence drop → V2 (filtered/full) → save WAV + JSON** (+ optional `segments_manifest.csv`). Embeddings are unchanged: **BirdNET 1024D** from every saved WAV.
+
+### Valid binary evaluation checklist
+
+1. **Full embedding set** must include label 0 (`noise/` in HDF5). Use `pipeline.mode: full`, or add audio under `raw_dir/noise/`.
+2. **Test split** must contain both classes; otherwise F1, confusion matrix, and **FPR on noise** are misleading (`evaluate.py` will log an error and set `binary_eval_valid: false` in `results/metrics.json`).
+3. Compare runs (baseline vs filtered vs full) using the **same** random seed and split settings.
 
 ---
 
@@ -88,24 +106,56 @@ python run_pipeline.py --config config.yaml --stage train
 # Infer: three-class routing (bird / noise / uncertain)
 python run_pipeline.py --config config.yaml --stage infer
 
-# Evaluate: confusion matrix + threshold analysis
+# Evaluate: confusion matrix + threshold analysis (text + metrics JSON)
 python run_pipeline.py --config config.yaml --stage evaluate
 
 # Mine: false positive + false negative mining
 python run_pipeline.py --config config.yaml --stage mine
 ```
 
-### Standalone Evaluation
+**Visual plots** (not a `run_pipeline` stage; run after training when `checkpoints/best_model.pt` exists):
+
+```bash
+python evaluate_visual.py --config config.yaml
+```
+
+### Standalone evaluation
+
+#### Text report (`evaluate.py`)
+
+Same logic as `--stage evaluate`:
 
 ```bash
 python evaluate.py --config config.yaml
 ```
 
-Outputs:
+Outputs (console + JSON):
 - Confusion matrix at default and optimal thresholds
 - Precision / Recall / F1 at each threshold
+- Per-class precision/recall and **FPR on noise** (false bird predictions on true noise), when the test set contains both classes
 - Recall-at-minimum-precision sweep
 - Probability distribution per class
+- `results/metrics.json` (configurable via `evaluation.results_dir`)
+
+#### Visual plots (`evaluate_visual.py`)
+
+Run **after** you have trained checkpoints (`checkpoints/best_model.pt`). This script saves figures under `results/` (not invoked by `run_pipeline.py`):
+
+```bash
+python evaluate_visual.py --config config.yaml
+```
+
+Optional baseline comparison (prints deltas only):
+
+```bash
+python evaluate_visual.py --config config.yaml --compare-json results/metrics_baseline.json
+```
+
+Generated files:
+- `results/confusion_matrix.png` — heatmap
+- `results/metrics_bar_chart.png` — accuracy / precision / recall / F1
+- `results/threshold_comparison.png` — binary only (0.5 vs best-F1 threshold)
+- `results/metrics.json` — structured metrics (may overwrite the file from `evaluate.py`)
 
 ---
 
@@ -163,10 +213,13 @@ The mining stage automates step 2 by scanning `noise/` for potential false negat
 ```
 ├── config.yaml              # Central configuration
 ├── run_pipeline.py          # CLI entry-point (all stages)
-├── evaluate.py              # Standalone evaluation script
+├── evaluate.py              # Standalone text evaluation + metrics JSON
+├── evaluate_visual.py       # Plots (heatmap, bar charts) + metrics JSON → results/
+├── clean_pipeline_outputs.py  # Optional: delete processed/embeddings/checkpoints
 ├── requirements.txt
 │
-├── preprocessing/           # Audio loading, segmentation, silence removal
+├── preprocessing/           # Segmentation, silence removal, Noise Segregation V2
+├── tests/                   # Unit tests (e.g. V2 scoring)
 ├── embedding/               # BirdNET TFLite encoder, HDF5 storage
 ├── dataset/                 # PyTorch Dataset, splits, class weighting
 ├── models/                  # MLP classifier architecture

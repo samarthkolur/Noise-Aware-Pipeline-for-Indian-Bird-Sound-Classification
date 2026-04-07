@@ -352,6 +352,13 @@ def build_dataloaders(
         else:
             dataset = EmbeddingDataset.from_directory(embeddings_dir, binary=binary)
 
+    if binary and int((dataset.labels == 0).sum()) == 0:
+        logger.warning(
+            "Binary mode is on but there are zero samples with label 0 (noise). "
+            "Add embeddings from a folder named exactly 'noise' under raw data, "
+            "then preprocess → embed → train again."
+        )
+
     ds_cfg = cfg.get("dataset", {})
     train_cfg = cfg.get("training", {})
 

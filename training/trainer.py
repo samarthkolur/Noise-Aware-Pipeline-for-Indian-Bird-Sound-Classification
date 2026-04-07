@@ -1,285 +1,391 @@
 """
-trainer.py — Training & validation loop for embedding classifiers.
+trainer.py — Train EmbeddingClassifier on BirdNET (or other) embeddings.
 
-Supports:
-  • Binary (BCE) and Multiclass (CrossEntropy) modes.
-  • Inverse-frequency class weighting to handle imbalance.
-  • F1-based checkpointing (instead of val_loss) for recall-sensitive tasks.
-  • Optimal threshold search after training.
-  • Confusion matrix logging.
-  • Early stopping and best-model checkpointing.
-  • AdamW optimizer with cosine LR scheduling.
+Loads HDF5 embeddings via dataset.build_dataloaders, optimizes BCE (binary) or
+CrossEntropy (multiclass), tracks accuracy / precision / recall / F1 on the
+validation set, saves the best checkpoint by validation F1, and runs early
+stopping. Writes ``best_model.pt`` and ``best_model_meta.json`` for inference.
 """
 
-import json
-from pathlib import Path
-from typing import Dict, Optional, Tuple
+from __future__ import annotations
 
+import json
+import random
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
+import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+from torch.optim import Adam
+from torch.optim.lr_scheduler import CosineAnnealingLR, ReduceLROnPlateau, StepLR
 from torch.utils.data import DataLoader
+from tqdm import tqdm
 
-from dataset.dataset import build_dataloaders
-from training.metrics import compute_metrics, compute_confusion_matrix, find_optimal_threshold
+from dataset.dataset import (
+    LabelEncoder,
+    build_dataloaders,
+    compute_class_weights,
+)
+from models.classifier import EmbeddingClassifier
+from training.metrics import compute_metrics, find_optimal_threshold
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 
+# ── Losses ─────────────────────────────────────────────────
+
+
+class BinaryFocalLoss(nn.Module):
+    """Focal loss for single-logit binary classification."""
+
+    def __init__(self, gamma: float = 2.0, alpha: Optional[float] = None) -> None:
+        super().__init__()
+        self.gamma = gamma
+        self.alpha = alpha
+
+    def forward(self, logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+        # logits (B,), targets (B,) float 0/1
+        bce = F.binary_cross_entropy_with_logits(logits, targets, reduction="none")
+        p = torch.sigmoid(logits)
+        p_t = p * targets + (1 - p) * (1 - targets)
+        focal = (1 - p_t).pow(self.gamma) * bce
+        if self.alpha is not None:
+            a_t = self.alpha * targets + (1 - self.alpha) * (1 - targets)
+            focal = a_t * focal
+        return focal.mean()
+
+
+class MulticlassFocalLoss(nn.Module):
+    """Focal loss for softmax multiclass (gamma on CE)."""
+
+    def __init__(self, gamma: float = 2.0, weight: Optional[torch.Tensor] = None) -> None:
+        super().__init__()
+        self.gamma = gamma
+        self.register_buffer("weight", weight)
+
+    def forward(self, logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+        log_p = F.log_softmax(logits, dim=1)
+        p = log_p.exp()
+        log_p_t = log_p.gather(1, targets.unsqueeze(1)).squeeze(1)
+        p_t = p.gather(1, targets.unsqueeze(1)).squeeze(1)
+        focal = -(1 - p_t).pow(self.gamma) * log_p_t
+        if self.weight is not None:
+            focal = focal * self.weight[targets]
+        return focal.mean()
+
+
+def _build_loss(
+    cfg: dict,
+    binary: bool,
+    num_classes: int,
+    train_labels: np.ndarray,
+    device: torch.device,
+) -> Optional[nn.Module]:
+    """Return a loss module, or ``None`` for binary BCE (handled with pos_weight in Trainer)."""
+    tcfg = cfg.get("training", {})
+    name = tcfg.get("loss", "cross_entropy")
+
+    if binary:
+        if name == "focal":
+            fl = tcfg.get("focal_loss", {})
+            alpha = fl.get("alpha")
+            gamma = float(fl.get("gamma", 2.0))
+            return BinaryFocalLoss(gamma=gamma, alpha=alpha).to(device)
+        return None  # plain BCEWithLogits via functional + pos_weight
+
+    weight_np = compute_class_weights(train_labels, num_classes)
+    weight = torch.from_numpy(weight_np).float().to(device)
+
+    if name == "focal":
+        fl = tcfg.get("focal_loss", {})
+        gamma = float(fl.get("gamma", 2.0))
+        return MulticlassFocalLoss(gamma=gamma, weight=weight).to(device)
+
+    if name == "label_smoothing":
+        ls = float(tcfg.get("label_smoothing", 0.1))
+        return nn.CrossEntropyLoss(weight=weight, label_smoothing=ls).to(device)
+
+    return nn.CrossEntropyLoss(weight=weight).to(device)
+
+
+def _binary_logits_from_output(logits: torch.Tensor) -> torch.Tensor:
+    if logits.ndim > 1:
+        return logits.squeeze(-1)
+    return logits
+
+
+def _bce_targets(labels: torch.Tensor, device: torch.device) -> torch.Tensor:
+    return labels.float().to(device)
+
+
+# ── Trainer ────────────────────────────────────────────────
+
+
 class Trainer:
-    """End-to-end training manager for embedding classifiers."""
+    """Train ``EmbeddingClassifier`` on precomputed embeddings."""
 
     def __init__(self, cfg: dict) -> None:
         self.cfg = cfg
         self.device = self._resolve_device(cfg)
+        self.binary = bool(cfg.get("model", {}).get("binary", True))
 
-        t_cfg = cfg.get("training", {})
-        self.epochs = t_cfg.get("epochs", 50)
-        self.lr = t_cfg.get("learning_rate", 1e-3)
-        self.weight_decay = t_cfg.get("weight_decay", 1e-4)
+        torch.manual_seed(cfg.get("project", {}).get("seed", 42))
+        np.random.seed(cfg.get("project", {}).get("seed", 42))
+        random.seed(cfg.get("project", {}).get("seed", 42))
 
-        self.binary = cfg.get("model", {}).get("binary", False)
-
-        self.checkpoint_dir = Path(t_cfg.get("checkpoint_dir", "./checkpoints"))
-        self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
-
-        # Early stopping
-        es_cfg = t_cfg.get("early_stopping", {})
-        self.es_enabled = es_cfg.get("enabled", True)
-        self.es_patience = es_cfg.get("patience", 7)
-        self.es_min_delta = es_cfg.get("min_delta", 0.001)
-
-    # ── Public API ──────────────────────────────────────────
-
-    def fit(self) -> None:
-        """Run the full training loop: data → build model → train/val → save."""
-        # 1. Load Data
-        train_loader, val_loader, _, label_encoder = build_dataloaders(
-            self.cfg, binary=self.binary
+        train_loader, val_loader, test_loader, encoder = build_dataloaders(
+            cfg, binary=self.binary, balanced_train=True
         )
-        self.label_encoder = label_encoder
+        self.train_loader = train_loader
+        self.val_loader = val_loader
+        self.test_loader = test_loader
+        self.label_encoder: LabelEncoder = encoder
 
-        # 2. Build Model
-        from models.classifier import EmbeddingClassifier
+        # Full training label array for loss weights / pos_weight
+        self._train_labels = self._gather_train_labels(cfg)
+
+        num_classes = 1 if self.binary else self.label_encoder.num_classes
         self.model = EmbeddingClassifier(
-            input_dim=self.cfg["embedding"]["embedding_dim"],
-            num_classes=1 if self.binary else label_encoder.num_classes,
-            hidden_dims=self.cfg["model"].get("hidden_dims", [512, 256]),
-            dropout=self.cfg["model"].get("dropout", 0.3),
+            input_dim=int(cfg["embedding"]["embedding_dim"]),
+            num_classes=num_classes,
+            hidden_dims=list(cfg["model"].get("hidden_dims", [512, 256])),
+            dropout=float(cfg["model"].get("dropout", 0.3)),
         ).to(self.device)
 
-        # 3. Optimiser & Scheduler
-        optimizer = torch.optim.AdamW(
-            self.model.parameters(), lr=self.lr, weight_decay=self.weight_decay
+        self.loss_fn = _build_loss(
+            cfg,
+            self.binary,
+            self.label_encoder.num_classes,
+            self._train_labels,
+            self.device,
         )
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=self.epochs
+
+        n0 = max(1, int((self._train_labels == 0).sum()))
+        n1 = max(1, int((self._train_labels == 1).sum()))
+        self._bce_pos_weight = torch.tensor([n0 / n1], dtype=torch.float32)
+
+        tcfg = cfg.get("training", {})
+        self.optimizer = Adam(
+            self.model.parameters(),
+            lr=float(tcfg.get("learning_rate", 1e-3)),
+            weight_decay=float(tcfg.get("weight_decay", 1e-4)),
         )
 
-        # 4. Loss Function
-        train_labels = train_loader.dataset.dataset.labels[
-            train_loader.dataset.indices
-        ]
-        class_w = self._get_class_weights(train_labels, label_encoder.num_classes)
-        criterion = self._build_loss(class_w)
+        epochs = int(tcfg.get("epochs", 50))
+        self.epochs = epochs
+        self.scheduler = self._build_scheduler(epochs)
 
-        # Log class distribution
-        if self.binary:
-            n_bird = int((train_labels == 1).sum())
-            n_noise = int((train_labels == 0).sum())
-            logger.info(f"Train set: {n_bird} bird, {n_noise} noise "
-                        f"(ratio {n_bird / max(n_noise, 1):.2f})")
+        es = tcfg.get("early_stopping", {})
+        self.early_stopping_enabled = bool(es.get("enabled", True))
+        self.patience = int(es.get("patience", 7))
+        self.min_delta = float(es.get("min_delta", 0.001))
 
-        # 5. Loop — checkpoint on best F1 (recall-sensitive)
-        best_f1 = -1.0
-        best_val_loss = float("inf")
-        patience_counter = 0
+        self.checkpoint_dir = Path(tcfg.get("checkpoint_dir", "./checkpoints"))
+        self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
-        logger.info(f"Starting training for {self.epochs} epochs "
-                    f"({label_encoder.num_classes} classes, binary={self.binary})")
+    def _gather_train_labels(self, cfg: dict) -> np.ndarray:
+        """Labels for training indices only (matches stratified split)."""
+        from dataset.dataset import EmbeddingDataset, create_splits
+        from torch.utils.data import Subset
 
-        for epoch in range(1, self.epochs + 1):
-            train_loss = self._train_epoch(train_loader, optimizer, criterion)
-            val_loss, val_metrics, val_logits, val_labels = self._validate(
-                val_loader, criterion
-            )
-            scheduler.step()
-
-            m = val_metrics
-            logger.info(
-                f"Epoch {epoch:02d}/{self.epochs} | "
-                f"Train Loss: {train_loss:.4f} | "
-                f"Val Loss: {val_loss:.4f} | "
-                f"Acc: {m['acc']:.3f} | Prec: {m['prec']:.3f} | "
-                f"Rec: {m['rec']:.3f} | F1: {m['f1']:.3f}"
-            )
-
-            # Checkpoint on best F1 (not val_loss) for recall-sensitive tasks
-            current_f1 = m["f1"]
-            if current_f1 > best_f1 + self.es_min_delta:
-                best_f1 = current_f1
-                best_val_loss = val_loss
-                patience_counter = 0
-                self._save_checkpoint(epoch, val_loss, val_metrics)
-            else:
-                patience_counter += 1
-
-            if self.es_enabled and patience_counter >= self.es_patience:
-                logger.info(f"Early stopping triggered at epoch {epoch}")
-                break
-
-        # 6. Post-training: optimal threshold + confusion matrix
-        logger.info("Training complete ✓")
-        self._post_training_analysis(val_logits, val_labels)
-
-    # ── Private ─────────────────────────────────────────────
-
-    def _train_epoch(
-        self, loader: DataLoader, optimizer: torch.optim.Optimizer, criterion: nn.Module
-    ) -> float:
-        self.model.train()
-        total_loss = 0.0
-
-        for embs, labels in loader:
-            embs = embs.to(self.device)
-            labels = labels.to(self.device)
-
-            if self.binary:
-                labels = labels.float()
-
-            logits = self.model(embs)
-            if self.binary and logits.ndim > 1:
-                logits = logits.squeeze(-1)
-
-            loss = criterion(logits, labels)
-
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-
-            total_loss += loss.item() * embs.size(0)
-
-        return total_loss / len(loader.dataset)
-
-    @torch.no_grad()
-    def _validate(
-        self, loader: DataLoader, criterion: nn.Module
-    ) -> Tuple[float, dict, torch.Tensor, torch.Tensor]:
-        self.model.eval()
-        total_loss = 0.0
-        all_logits, all_labels = [], []
-
-        for embs, labels in loader:
-            embs = embs.to(self.device)
-            labels = labels.to(self.device)
-
-            if self.binary:
-                labels_f = labels.float()
-            else:
-                labels_f = labels
-
-            logits = self.model(embs)
-            if self.binary and logits.ndim > 1:
-                logits = logits.squeeze(-1)
-
-            loss = criterion(logits, labels_f)
-            total_loss += loss.item() * embs.size(0)
-
-            all_logits.append(logits.cpu())
-            all_labels.append(labels.cpu())
-
-        avg_loss = total_loss / len(loader.dataset)
-        cat_logits = torch.cat(all_logits)
-        cat_labels = torch.cat(all_labels)
-
-        metrics = compute_metrics(cat_logits, cat_labels, binary=self.binary)
-        return avg_loss, metrics, cat_logits, cat_labels
-
-    def _post_training_analysis(
-        self, val_logits: torch.Tensor, val_labels: torch.Tensor
-    ) -> None:
-        """After training: find optimal threshold and log confusion matrix."""
-        if not self.binary:
-            cm_str = compute_confusion_matrix(val_logits, val_labels, binary=False)
-            logger.info(f"\n{cm_str}")
-            return
-
-        # Find optimal threshold
-        result = find_optimal_threshold(
-            val_logits, val_labels, metric="f1", steps=50
-        )
-        opt_thresh = result["best_threshold"]
-        opt_f1 = result["best_value"]
-
-        logger.info(f"Optimal threshold: {opt_thresh:.3f} (F1={opt_f1:.4f})")
-
-        # Log confusion matrix at optimal threshold
-        cm_str = compute_confusion_matrix(
-            val_logits, val_labels, binary=True, threshold=opt_thresh
-        )
-        logger.info(f"\n{cm_str}")
-
-        # Also log at default 0.5 for comparison
-        cm_default = compute_confusion_matrix(
-            val_logits, val_labels, binary=True, threshold=0.5
-        )
-        logger.info(f"\nAt default threshold=0.50:\n{cm_default}")
-
-        # Save optimal threshold and curve into checkpoint metadata
-        meta_path = self.checkpoint_dir / "best_model_meta.json"
-        if meta_path.exists():
-            with open(meta_path, "r") as f:
-                meta = json.load(f)
-            meta["optimal_threshold"] = opt_thresh
-            meta["threshold_curve"] = result["curve"]
-            with open(meta_path, "w") as f:
-                json.dump(meta, f, indent=2)
-            logger.info(f"Saved optimal threshold ({opt_thresh:.3f}) to {meta_path}")
-
-    def _get_class_weights(
-        self, labels_np, num_classes: int
-    ) -> Optional[torch.Tensor]:
-        if self.binary:
-            pos = (labels_np == 1).sum()
-            neg = (labels_np == 0).sum()
-            pos_weight = float(neg) / max(float(pos), 1.0)
-            return torch.tensor([pos_weight], dtype=torch.float32, device=self.device)
+        embeddings_dir = Path(cfg["data"]["embeddings_dir"])
+        manifest = embeddings_dir / "manifest.csv"
+        if manifest.exists():
+            ds = EmbeddingDataset.from_manifest(manifest, binary=self.binary)
         else:
-            from dataset.dataset import compute_class_weights
-            w = compute_class_weights(labels_np, num_classes)
-            return torch.from_numpy(w).to(self.device)
+            ds = EmbeddingDataset.from_directory(embeddings_dir, binary=self.binary)
 
-    def _build_loss(self, class_weights: torch.Tensor) -> nn.Module:
-        if self.binary:
-            return nn.BCEWithLogitsLoss(pos_weight=class_weights)
-        else:
-            return nn.CrossEntropyLoss(weight=class_weights)
+        splits = create_splits(
+            ds,
+            val_frac=cfg.get("dataset", {}).get("val_split", 0.15),
+            test_frac=cfg.get("dataset", {}).get("test_split", 0.10),
+            stratify=cfg.get("dataset", {}).get("stratify", True),
+            seed=cfg.get("project", {}).get("seed", 42),
+        )
+        return ds.labels[splits.train_idx]
 
-    def _save_checkpoint(self, epoch: int, val_loss: float, metrics: dict) -> None:
-        path = self.checkpoint_dir / "best_model.pt"
-        meta_path = self.checkpoint_dir / "best_model_meta.json"
-
-        torch.save({
-            "epoch": epoch,
-            "model_state_dict": self.model.state_dict(),
-            "val_loss": val_loss,
-            "metrics": metrics,
-            "binary": self.binary,
-            "num_classes": self.label_encoder.num_classes,
-        }, str(path))
-
-        with open(meta_path, "w") as f:
-            json.dump({
-                "epoch": epoch,
-                "val_loss": val_loss,
-                "metrics": metrics,
-                "binary": self.binary,
-                "label_map": self.label_encoder.name2id,
-            }, f, indent=2)
+    def _build_scheduler(self, epochs: int) -> Optional[Any]:
+        name = self.cfg.get("training", {}).get("scheduler", "cosine")
+        if name == "cosine":
+            return CosineAnnealingLR(self.optimizer, T_max=epochs)
+        if name == "step":
+            return StepLR(self.optimizer, step_size=max(1, epochs // 3), gamma=0.1)
+        if name == "plateau":
+            return ReduceLROnPlateau(
+                self.optimizer, mode="max", factor=0.5, patience=3
+            )
+        return None
 
     @staticmethod
     def _resolve_device(cfg: dict) -> torch.device:
-        device_str = cfg.get("project", {}).get("device", "auto")
-        if device_str == "auto":
+        s = cfg.get("project", {}).get("device", "auto")
+        if s == "auto":
             return torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        return torch.device(device_str)
+        return torch.device(s)
+
+    def _forward_loss(
+        self, logits: torch.Tensor, labels: torch.Tensor
+    ) -> torch.Tensor:
+        if self.binary:
+            lg = _binary_logits_from_output(logits)
+            y = _bce_targets(labels, lg.device)
+            if isinstance(self.loss_fn, BinaryFocalLoss):
+                return self.loss_fn(lg, y)
+            pw = self._bce_pos_weight.to(device=lg.device, dtype=lg.dtype)
+            return F.binary_cross_entropy_with_logits(lg, y, pos_weight=pw)
+        assert self.loss_fn is not None
+        return self.loss_fn(logits, labels.to(self.device).long())
+
+    def _train_epoch(self) -> float:
+        self.model.train()
+        total_loss = 0.0
+        n_batches = 0
+        for emb, labels in self.train_loader:
+            emb = emb.to(self.device)
+            labels = labels.to(self.device)
+            self.optimizer.zero_grad(set_to_none=True)
+            logits = self.model(emb)
+            loss = self._forward_loss(logits, labels)
+            loss.backward()
+            self.optimizer.step()
+            total_loss += float(loss.item())
+            n_batches += 1
+        return total_loss / max(n_batches, 1)
+
+    @torch.no_grad()
+    def _evaluate_loader(self, loader: DataLoader) -> Tuple[float, Dict[str, float]]:
+        """Return mean loss and metrics (acc, prec, rec, f1) at threshold 0.5 (binary)."""
+        self.model.eval()
+        total_loss = 0.0
+        n_batches = 0
+        all_logits: List[torch.Tensor] = []
+        all_labels: List[torch.Tensor] = []
+
+        for emb, labels in loader:
+            emb = emb.to(self.device)
+            labels = labels.to(self.device)
+            logits = self.model(emb)
+            loss = self._forward_loss(logits, labels)
+            total_loss += float(loss.item())
+            n_batches += 1
+            all_logits.append(logits.cpu())
+            all_labels.append(labels.cpu())
+
+        cat_l = torch.cat(all_logits)
+        cat_y = torch.cat(all_labels)
+        avg_loss = total_loss / max(n_batches, 1)
+        m = compute_metrics(cat_l, cat_y, binary=self.binary, threshold=0.5)
+        return avg_loss, m
+
+    def _label_map_for_meta(self) -> Dict[str, int]:
+        if self.binary:
+            enc = self.label_encoder
+            return {enc.decode(0): 0, enc.decode(1): 1}
+        return dict(self.label_encoder.name2id)
+
+    def fit(self) -> None:
+        """Full training with best checkpoint by validation F1."""
+        best_f1 = -1.0
+        best_epoch = -1
+        epochs_no_improve = 0
+
+        for epoch in range(1, self.epochs + 1):
+            train_loss = self._train_epoch()
+            val_loss, val_metrics = self._evaluate_loader(self.val_loader)
+
+            logger.info(
+                f"Epoch {epoch}/{self.epochs}  "
+                f"train_loss={train_loss:.4f}  val_loss={val_loss:.4f}  "
+                f"val_acc={val_metrics['acc']:.4f}  val_prec={val_metrics['prec']:.4f}  "
+                f"val_rec={val_metrics['rec']:.4f}  val_f1={val_metrics['f1']:.4f}"
+            )
+
+            if self.scheduler is not None:
+                if isinstance(self.scheduler, ReduceLROnPlateau):
+                    self.scheduler.step(val_metrics["f1"])
+                else:
+                    self.scheduler.step()
+
+            improved = val_metrics["f1"] > best_f1 + self.min_delta
+            if improved:
+                best_f1 = val_metrics["f1"]
+                best_epoch = epoch
+                epochs_no_improve = 0
+                self._save_checkpoint(epoch, val_metrics)
+            else:
+                epochs_no_improve += 1
+
+            if self.early_stopping_enabled and epochs_no_improve >= self.patience:
+                logger.info(
+                    f"Early stopping at epoch {epoch} (no +{self.min_delta} val F1 for "
+                    f"{self.patience} epochs). Best: epoch {best_epoch}, F1={best_f1:.4f}"
+                )
+                break
+
+        optimal_threshold = 0.5
+        if self.binary and best_epoch >= 1:
+            self._load_checkpoint_weights()
+            val_logits, val_labels = self._collect_logits(self.val_loader)
+            thr_res = find_optimal_threshold(
+                val_logits, val_labels, metric="f1", steps=50
+            )
+            optimal_threshold = float(thr_res["best_threshold"])
+            logger.info(
+                f"Validation F1-optimal threshold: {optimal_threshold:.4f} "
+                f"(F1={thr_res['best_value']:.4f})"
+            )
+
+        self._write_meta(optimal_threshold, best_f1, best_epoch)
+        logger.info(f"Best model: epoch {best_epoch}, val_f1={best_f1:.4f}")
+
+    @torch.no_grad()
+    def _collect_logits(self, loader: DataLoader) -> Tuple[torch.Tensor, torch.Tensor]:
+        self.model.eval()
+        outs, ys = [], []
+        for emb, labels in loader:
+            emb = emb.to(self.device)
+            logits = self.model(emb)
+            if self.binary and logits.ndim > 1:
+                logits = logits.squeeze(-1)
+            outs.append(logits.cpu())
+            ys.append(labels)
+        return torch.cat(outs), torch.cat(ys)
+
+    def _save_checkpoint(self, epoch: int, val_metrics: Dict[str, float]) -> None:
+        path = self.checkpoint_dir / "best_model.pt"
+        torch.save(
+            {
+                "model_state_dict": self.model.state_dict(),
+                "epoch": epoch,
+                "val_metrics": val_metrics,
+            },
+            path,
+        )
+        logger.info(f"Saved checkpoint → {path} (val_f1={val_metrics['f1']:.4f})")
+
+    def _load_checkpoint_weights(self) -> None:
+        path = self.checkpoint_dir / "best_model.pt"
+        chk = torch.load(path, map_location=self.device, weights_only=True)
+        self.model.load_state_dict(chk["model_state_dict"])
+
+    def _write_meta(
+        self,
+        optimal_threshold: float,
+        best_val_f1: float,
+        best_epoch: int,
+    ) -> None:
+        meta = {
+            "binary": self.binary,
+            "label_map": self._label_map_for_meta(),
+            "optimal_threshold": optimal_threshold,
+            "best_val_f1": float(best_val_f1),
+            "best_epoch": int(best_epoch),
+            "embedding_dim": int(self.cfg["embedding"]["embedding_dim"]),
+        }
+        out = self.checkpoint_dir / "best_model_meta.json"
+        with open(out, "w", encoding="utf-8") as f:
+            json.dump(meta, f, indent=2)
+        logger.info(f"Wrote {out}")

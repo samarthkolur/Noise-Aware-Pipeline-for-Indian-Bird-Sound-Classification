@@ -1,0 +1,47 @@
+# Paths are relative to the project directory (where config.yaml lives) unless absolute.
+pipeline_config: config.yaml
+
+# Python that has ``birdnet_analyzer`` (e.g. your ``birdnet_env``). The pipeline can stay in project ``.venv``;
+# only this executable is used for ``python -m birdnet_analyzer.analyze``.
+#
+# How to get the path (with birdnet_env activated):  PowerShell:  (Get-Command python).Source
+#   or:  where.exe python
+# Paste below using forward slashes, e.g.:
+#   birdnet_python: C:/Users/yasha/anaconda3/envs/birdnet_env/python.exe
+#
+# Same effect as env var BIRDNET_PYTHON for one session:  $env:BIRDNET_PYTHON="C:\...\python.exe"
+birdnet_python: "C:/Users/yasha/birdnet_env/Scripts/python.exe"
+
+paths:
+  baseline_birdnet_out: outputs/baseline_birdnet
+  filtered_birdnet_out: outputs/filtered_birdnet
+  comparison_dir: comparison
+
+# Segment alignment: attribute a BirdNET interval to a 3s pipeline segment if overlap
+# duration / min(interval_len, segment_len) >= overlap_tau, OR use midpoint rule.
+alignment:
+  overlap_tau: 0.5
+  use_midpoint_fallback: true
+
+# Single source of truth for BirdNET-Analyzer CLI (both baseline and filtered runs).
+birdnet:
+  overlap: 0.0
+  min_conf: 0.25
+  sensitivity: 1.0
+  sf_thresh: 0.03
+  lat: -1
+  lon: -1
+  week: -1
+  locale: en
+  threads: 4
+  batch_size: 1
+  fmin: 0
+  fmax: 15000
+  rtype:
+    - csv
+  combine_results: false
+  merge_consecutive: 1
+  skip_existing_results: false
+  # Some BirdNET-Analyzer builds do not support --show_progress; keep false for compatibility.
+  show_progress: false
+  # classifier: null  # optional: same .tflite for both runs if set

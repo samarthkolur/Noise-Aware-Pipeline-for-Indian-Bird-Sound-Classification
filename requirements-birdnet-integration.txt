@@ -1,0 +1,12 @@
+# Dependencies for birdnet_integration steps AFTER BirdNET CLI runs:
+#   normalize_birdnet_export.py, align_segments.py, compare_baseline_filtered.py
+# Install into the SAME venv you use for: python -m birdnet_integration.run_full_experiment
+#
+#   pip install -r requirements-birdnet-integration.txt
+#
+# Or install the full pipeline (includes these): pip install -r requirements.txt
+
+pandas>=2.0.0
+matplotlib>=3.7.0
+numpy>=1.24.0
+pyarrow>=14.0.0

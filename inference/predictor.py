@@ -101,6 +101,9 @@ class Predictor:
             except Exception as e:
                 logger.error(f"Failed to process {audio_path.name}: {e}")
 
+        if hasattr(self.encoder, "flush_cross_sample_embedding_debug"):
+            self.encoder.flush_cross_sample_embedding_debug()
+
         logger.info("Inference complete ✓")
         logger.info(f"  Segments processed:      {counts['total']}")
         logger.info(f"  Routed to clean_birds:   {counts['bird']}")

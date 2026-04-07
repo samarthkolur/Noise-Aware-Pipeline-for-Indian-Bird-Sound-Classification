@@ -1,11 +1,8 @@
 """
 metrics.py — Evaluation metrics for binary and multiclass classification.
-
-Supports:
-  • Configurable decision threshold (binary mode)
-  • Confusion matrix generation
-  • Optimal threshold search (maximize F1 or recall at min precision)
 """
+
+from __future__ import annotations
 
 import numpy as np
 import torch
@@ -24,17 +21,7 @@ def compute_metrics(
     binary: bool,
     threshold: float = 0.5,
 ) -> dict:
-    """Compute accuracy, precision, recall, and F1.
-
-    Args:
-        logits: (B, C) raw scores if multiclass, or (B,) if binary.
-        labels: (B,) ground-truth integers.
-        binary: If True, treats this as a binary classification problem.
-        threshold: Decision threshold for binary mode (default 0.5).
-
-    Returns:
-        Dict with keys: acc, prec, rec, f1
-    """
+    """Compute accuracy, precision, recall, and F1."""
     labels_np = labels.cpu().numpy()
 
     if binary:
@@ -67,12 +54,8 @@ def compute_confusion_matrix(
     threshold: float = 0.5,
     label_names: list | None = None,
 ) -> str:
-    """Generate a formatted confusion matrix string.
-
-    For binary mode, returns TP/FP/FN/TN counts.
-    """
+    """Return a printable confusion matrix string."""
     labels_np = labels.cpu().numpy()
-
     if binary:
         if logits.ndim > 1:
             logits = logits.squeeze(-1)
@@ -81,92 +64,97 @@ def compute_confusion_matrix(
     else:
         preds_np = logits.argmax(dim=1).cpu().numpy()
 
-    cm = confusion_matrix(labels_np, preds_np, labels=[0, 1] if binary else None)
-
-    if binary:
-        tn, fp, fn, tp = cm.ravel()
-        lines = [
-            "Confusion Matrix (threshold={:.2f}):".format(threshold),
-            "                 Predicted",
-            "               Noise   Bird",
-            f"  Actual Noise  {tn:5d}  {fp:5d}",
-            f"  Actual Bird   {fn:5d}  {tp:5d}",
-            "",
-            f"  TP={tp}  FP={fp}  FN={fn}  TN={tn}",
-            f"  Precision = {tp / max(tp + fp, 1):.4f}",
-            f"  Recall    = {tp / max(tp + fn, 1):.4f}",
-            f"  F1        = {2 * tp / max(2 * tp + fp + fn, 1):.4f}",
-        ]
-    else:
-        names = label_names or [str(i) for i in range(cm.shape[0])]
-        header = "         " + "  ".join(f"{n:>7s}" for n in names)
-        lines = ["Confusion Matrix:", header]
-        for i, row in enumerate(cm):
-            row_str = "  ".join(f"{v:7d}" for v in row)
-            lines.append(f"  {names[i]:>7s}  {row_str}")
-
+    cm = confusion_matrix(labels_np, preds_np)
+    lines = ["Confusion Matrix (rows=true, cols=pred):"]
+    lines.append(str(cm))
     return "\n".join(lines)
+
+
+def compute_binary_per_class_metrics(
+    logits: torch.Tensor,
+    labels: torch.Tensor,
+    threshold: float = 0.5,
+) -> dict:
+    """Precision/recall for class 0 (noise) and class 1 (bird); FPR on noise."""
+    if logits.ndim > 1:
+        logits = logits.squeeze(-1)
+    probs = torch.sigmoid(logits).cpu().numpy()
+    preds = (probs > threshold).astype(int)
+    y = labels.cpu().numpy()
+
+    # Class 1 = bird (positive in sklearn "positive" sense for PR on bird)
+    prec_bird = precision_score(y, preds, pos_label=1, zero_division=0)
+    rec_bird = recall_score(y, preds, pos_label=1, zero_division=0)
+    prec_noise = precision_score(y, preds, pos_label=0, zero_division=0)
+    rec_noise = recall_score(y, preds, pos_label=0, zero_division=0)
+
+    # FPR on noise: P(pred bird | true noise) = FP / (TN+FP)
+    noise_mask = y == 0
+    n_noise = int(noise_mask.sum())
+    if n_noise == 0:
+        fpr_noise = float("nan")
+    else:
+        fp = int((preds[noise_mask] == 1).sum())
+        fpr_noise = fp / n_noise
+
+    return {
+        "prec_bird": float(prec_bird),
+        "rec_bird": float(rec_bird),
+        "prec_noise": float(prec_noise),
+        "rec_noise": float(rec_noise),
+        "fpr_noise": fpr_noise,
+    }
 
 
 def find_optimal_threshold(
     logits: torch.Tensor,
     labels: torch.Tensor,
     metric: str = "f1",
-    min_precision: float = 0.5,
     steps: int = 50,
+    min_precision: float | None = None,
 ) -> dict:
-    """Sweep thresholds to find the optimal decision boundary.
-
-    Args:
-        logits: (B,) raw binary logits.
-        labels: (B,) ground-truth binary labels.
-        metric: Optimization target — 'f1', 'recall', or 'recall_at_precision'.
-        min_precision: Minimum precision constraint when metric='recall_at_precision'.
-        steps: Number of threshold candidates to evaluate.
-
-    Returns:
-        Dict with 'best_threshold', 'best_value', and 'curve' (list of dicts).
-    """
+    """Grid-search thresholds in (0, 1) for binary logits."""
     if logits.ndim > 1:
         logits = logits.squeeze(-1)
     probs = torch.sigmoid(logits).cpu().numpy()
-    labels_np = labels.cpu().numpy()
+    y = labels.cpu().numpy()
 
-    thresholds = np.linspace(0.05, 0.95, steps)
+    thresholds = np.linspace(0.01, 0.99, steps)
     curve = []
-    best_val = -1.0
-    best_thresh = 0.5
+    best_t = 0.5
+    best_val = 0.0
 
     for t in thresholds:
         preds = (probs > t).astype(int)
-        tp = int(((preds == 1) & (labels_np == 1)).sum())
-        fp = int(((preds == 1) & (labels_np == 0)).sum())
-        fn = int(((preds == 0) & (labels_np == 1)).sum())
-        tn = int(((preds == 0) & (labels_np == 0)).sum())
+        prec = precision_score(y, preds, average="binary", zero_division=0)
+        rec = recall_score(y, preds, average="binary", zero_division=0)
+        f1 = f1_score(y, preds, average="binary", zero_division=0)
 
-        prec = tp / max(tp + fp, 1)
-        rec = tp / max(tp + fn, 1)
-        f1 = 2 * tp / max(2 * tp + fp + fn, 1)
-
-        entry = {"threshold": float(t), "precision": prec, "recall": rec, "f1": f1}
-        curve.append(entry)
+        curve.append(
+            {
+                "threshold": float(t),
+                "precision": float(prec),
+                "recall": float(rec),
+                "f1": float(f1),
+            }
+        )
 
         if metric == "f1":
             score = f1
-        elif metric == "recall":
-            score = rec
-        elif metric == "recall_at_precision":
-            score = rec if prec >= min_precision else -1.0
+            if score > best_val:
+                best_val = score
+                best_t = float(t)
+        elif metric == "recall_at_precision" and min_precision is not None:
+            if prec >= min_precision and rec > best_val:
+                best_val = rec
+                best_t = float(t)
         else:
-            score = f1
-
-        if score > best_val:
-            best_val = score
-            best_thresh = float(t)
+            if f1 > best_val:
+                best_val = f1
+                best_t = float(t)
 
     return {
-        "best_threshold": best_thresh,
-        "best_value": best_val,
-        "metric": metric,
+        "best_threshold": best_t,
+        "best_value": float(best_val),
         "curve": curve,
     }

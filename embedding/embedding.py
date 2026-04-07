@@ -16,7 +16,7 @@ Storage layout:
 from __future__ import annotations
 
 import csv
-import json
+from collections import Counter
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -32,6 +32,93 @@ from tqdm import tqdm
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+
+# ── BirdNET V2.4 (TFLite) — required for embedding.model_name: birdnet ─────
+REQUIRED_BIRDNET_VERSION = "V2.4"
+REQUIRED_BIRDNET_TFLITE_NAME = "BirdNET_GLOBAL_6K_V2.4_Model_FP32.tflite"
+
+
+class BirdNETModelNotFoundError(FileNotFoundError):
+    """The BirdNET ``.tflite`` file is missing; no fallback encoder is used."""
+
+
+def _project_root() -> Path:
+    return Path(__file__).resolve().parent.parent
+
+
+def _birdnet_missing_message(*, searched: List[str], extra: str = "") -> str:
+    local_dir = _project_root() / "birdnet_weights"
+    expected_file = local_dir / REQUIRED_BIRDNET_TFLITE_NAME
+    lines = [
+        "BirdNET TFLite model is required but was not found.",
+        f"  Required BirdNET version: {REQUIRED_BIRDNET_VERSION}",
+        f"  Required filename: {REQUIRED_BIRDNET_TFLITE_NAME}",
+        "  Obtain the file by either:",
+        "    (1) pip install birdnetlib ai-edge-litert  — model ships under site-packages/birdnetlib/...",
+        "    (2) Download official bundle: https://birdnet-team.github.io/BirdNET-Analyzer/models.html",
+        "        (V2.4 → BirdNET-Analyzer-V2.4.zip), extract the .tflite above.",
+        f"  Recommended project path: {expected_file}",
+        "  Then set embedding.birdnet_model_path: auto  OR  an absolute path to the .tflite file.",
+        "  Searched locations:",
+    ]
+    for s in searched:
+        lines.append(f"    - {s}")
+    if extra:
+        lines.append(extra)
+    return "\n".join(lines)
+
+
+def _resolve_birdnet_model_path(cfg: dict) -> Path:
+    """Resolve path to BirdNET TFLite; raises BirdNETModelNotFoundError if missing.
+
+    When ``birdnet_model_path`` is ``auto``: (1) project-local
+    ``birdnet_weights/BirdNET_GLOBAL_6K_V2.4_Model_FP32.tflite`` if present;
+    else (2) the file bundled with ``birdnetlib`` under site-packages.
+    """
+    emb_cfg = cfg.get("embedding", {})
+    raw = emb_cfg.get("birdnet_model_path", None)
+    local_weights = _project_root() / "birdnet_weights" / REQUIRED_BIRDNET_TFLITE_NAME
+
+    if raw and str(raw).strip() and str(raw) != "auto":
+        p = Path(raw).expanduser()
+        if not p.is_absolute():
+            p = (_project_root() / p).resolve()
+        else:
+            p = p.resolve()
+        if not p.is_file():
+            raise BirdNETModelNotFoundError(
+                _birdnet_missing_message(
+                    searched=[str(p)],
+                    extra="  Config embedding.birdnet_model_path points to a file that does not exist.",
+                )
+            )
+        if p.name != REQUIRED_BIRDNET_TFLITE_NAME:
+            logger.warning(
+                "BirdNET weights file is named %s; expected %s — continuing anyway.",
+                p.name,
+                REQUIRED_BIRDNET_TFLITE_NAME,
+            )
+        print("  [BirdNET] Model source: embedding.birdnet_model_path (explicit)")
+        return p
+
+    # auto: prefer project birdnet_weights/, then birdnetlib bundle
+    searched: List[str] = [str(local_weights.resolve())]
+    if local_weights.is_file():
+        print("  [BirdNET] Model source: project birdnet_weights/ (local copy)")
+        return local_weights.resolve()
+
+    bundled = _find_birdnet_model()
+    if bundled:
+        searched.append(f"birdnetlib bundle: {bundled}")
+        print("  [BirdNET] Model source: birdnetlib site-packages (bundled .tflite)")
+        return Path(bundled).resolve()
+
+    expected_pkg = _birdnet_expected_package_path()
+    if expected_pkg:
+        searched.append(f"birdnetlib (expected path): {expected_pkg}")
+
+    raise BirdNETModelNotFoundError(_birdnet_missing_message(searched=searched))
 
 
 # ════════════════════════════════════════════════════════════
@@ -84,18 +171,30 @@ class BaseEncoder(ABC):
 #  BirdNET encoder (TFLite via ai-edge-litert)
 # ════════════════════════════════════════════════════════════
 
-def _find_birdnet_model() -> Optional[str]:
-    """Auto-detect the BirdNET TFLite model bundled with birdnetlib."""
+def _birdnet_expected_package_path() -> Optional[str]:
+    """Path where birdnetlib ships ``BirdNET_GLOBAL_6K_V2.4_Model_FP32.tflite`` (may not exist)."""
     import importlib.util
+    import os
+
     spec = importlib.util.find_spec("birdnetlib")
     if spec is None or spec.origin is None:
         return None
-    import os
     pkg_dir = os.path.dirname(spec.origin)
-    candidate = os.path.join(
-        pkg_dir, "models", "analyzer",
-        "BirdNET_GLOBAL_6K_V2.4_Model_FP32.tflite",
+    return os.path.join(
+        pkg_dir,
+        "models",
+        "analyzer",
+        REQUIRED_BIRDNET_TFLITE_NAME,
     )
+
+
+def _find_birdnet_model() -> Optional[str]:
+    """Auto-detect the BirdNET TFLite model bundled with birdnetlib."""
+    candidate = _birdnet_expected_package_path()
+    if candidate is None:
+        return None
+    import os
+
     return candidate if os.path.isfile(candidate) else None
 
 
@@ -116,30 +215,30 @@ class BirdNETEncoder(BaseEncoder):
     _EMB_DIM = 1024
 
     def __init__(self, cfg: dict) -> None:
-        emb_cfg = cfg.get("embedding", {})
-        model_path = emb_cfg.get("birdnet_model_path", None)
+        resolved = _resolve_birdnet_model_path(cfg)
 
-        # Auto-detect from birdnetlib if no explicit path
-        if not model_path or model_path == "auto":
-            model_path = _find_birdnet_model()
-
-        if model_path is None or not Path(model_path).is_file():
-            raise FileNotFoundError(
-                f"BirdNET TFLite model not found at '{model_path}'. "
-                "Install with: pip install birdnetlib ai-edge-litert"
-            )
-
-        self._model_path = str(model_path)
+        print("Loading BirdNET model from:", str(resolved))
+        self._model_path = str(resolved)
         self._interpreter = self._load_interpreter(self._model_path)
         self._input_details = self._interpreter.get_input_details()
 
         # Dynamically find the embedding tensor by name + shape
         self._emb_tensor_index = self._find_embedding_tensor()
 
+        print("Model loaded successfully")
+        print(
+            "[BirdNET] Resolved model path:",
+            self._model_path,
+            "| load OK | encoder=BirdNET (not placeholder)",
+        )
         logger.info(
             f"BirdNET V2.4 loaded ✓  (model: {Path(self._model_path).name}, "
             f"embedding: tensor {self._emb_tensor_index} → {self._EMB_DIM}D)"
         )
+
+        # Collect a few embeddings during extract to verify they vary across segments
+        self._emb_debug_buffer: List[np.ndarray] = []
+        self._cross_sample_reported: bool = False
 
     # ── BaseEncoder interface ──────────────────────────────
 
@@ -153,8 +252,95 @@ class BirdNETEncoder(BaseEncoder):
         self._interpreter.invoke()
 
         # Read the penultimate-layer embedding (NOT the classification output)
-        embedding = self._interpreter.get_tensor(self._emb_tensor_index)
-        return embedding.flatten().astype(np.float32)
+        raw = self._interpreter.get_tensor(self._emb_tensor_index)
+        embedding = raw.flatten().astype(np.float32)
+
+        # First segment: shape, sample values, mean/std; must not be all zeros
+        if not getattr(self, "_embedding_debug_printed", False):
+            self._embedding_debug_printed = True
+            raw_arr = np.asarray(raw)
+            mu = float(embedding.mean())
+            sigma = float(embedding.std())
+            all_zero = bool(np.all(embedding == 0))
+            print(
+                "[BirdNET embedding] raw tensor shape:",
+                raw_arr.shape,
+                "→ flat shape:",
+                embedding.shape,
+                embedding.dtype,
+            )
+            print("[BirdNET embedding] first embedding sample (first 16 values):", embedding[:16])
+            print(
+                "[BirdNET embedding] mean:",
+                mu,
+                "std:",
+                sigma,
+                "min:",
+                float(embedding.min()),
+                "max:",
+                float(embedding.max()),
+            )
+            print(
+                "[BirdNET embedding] all zeros:",
+                all_zero,
+                "all finite:",
+                bool(np.isfinite(embedding).all()),
+                "dim_ok:",
+                embedding.shape == (self._EMB_DIM,),
+            )
+            if all_zero or sigma < 1e-12:
+                print(
+                    "[BirdNET embedding] WARNING: vector is all zeros or ~constant — "
+                    "model output may not be valid."
+                )
+
+        # Cross-sample check (up to 5 segments)
+        if len(self._emb_debug_buffer) < 5:
+            self._emb_debug_buffer.append(embedding.copy())
+        if len(self._emb_debug_buffer) == 5 and not self._cross_sample_reported:
+            self._report_cross_sample_embeddings(5)
+            self._cross_sample_reported = True
+
+        return embedding
+
+    def _report_cross_sample_embeddings(self, n: int) -> None:
+        """Print whether embeddings differ across the first *n* segments."""
+        buf = self._emb_debug_buffer[:n]
+        stack = np.stack(buf, axis=0)
+        std_per_dim = np.std(stack, axis=0)
+        mean_std_across_samples = float(np.mean(std_per_dim))
+        l2_between_consecutive = np.linalg.norm(stack[1:] - stack[:-1], axis=1)
+        identical = np.all(np.abs(stack - stack[0]) < 1e-7)
+
+        print(
+            f"\n[BirdNET embedding] cross-sample check (n={n} segments): "
+            f"mean(std per dimension across samples)={mean_std_across_samples:.6f}"
+        )
+        print(
+            "[BirdNET embedding] L2 distance between consecutive segments: "
+            f"min={float(l2_between_consecutive.min()):.6f} "
+            f"max={float(l2_between_consecutive.max()):.6f} "
+            f"mean={float(l2_between_consecutive.mean()):.6f}"
+        )
+        if identical or mean_std_across_samples < 1e-10:
+            print(
+                "[BirdNET embedding] ERROR: embeddings are constant across samples — "
+                "model is likely not working correctly."
+            )
+        else:
+            print(
+                "[BirdNET embedding] OK: embeddings vary across samples "
+                "(expected for different audio segments)."
+            )
+
+    def flush_cross_sample_embedding_debug(self) -> None:
+        """If fewer than 5 segments were processed, still report when n >= 2."""
+        if self._cross_sample_reported:
+            return
+        n = len(self._emb_debug_buffer)
+        if n >= 2:
+            self._report_cross_sample_embeddings(n)
+            self._cross_sample_reported = True
 
     @property
     def embedding_dim(self) -> int:
@@ -324,7 +510,11 @@ class PlaceholderEncoder(BaseEncoder):
 # ════════════════════════════════════════════════════════════
 
 def build_encoder(cfg: dict) -> BaseEncoder:
-    """Instantiate the encoder specified in ``cfg['embedding']['model_name']``."""
+    """Instantiate the encoder specified in ``cfg['embedding']['model_name']``.
+
+    For ``birdnet``, raises ``BirdNETModelNotFoundError`` if the TFLite file is
+    missing (no fallback to another encoder).
+    """
     model_name = cfg["embedding"]["model_name"]
     if model_name in ("birdnet", "birdnet_v2.4"):
         return BirdNETEncoder(cfg)
@@ -516,7 +706,17 @@ class EmbeddingPipeline:
 
     def __init__(self, cfg: dict) -> None:
         self.cfg = cfg
+        mn = cfg.get("embedding", {}).get("model_name", "")
+        if mn == "placeholder":
+            raise RuntimeError(
+                "Embedding extraction requires embedding.model_name: 'birdnet'. "
+                "Placeholder embeddings are not allowed for this pipeline."
+            )
         self.encoder = build_encoder(cfg)
+        if getattr(self.encoder, "name", "") == "placeholder_cnn":
+            raise RuntimeError(
+                "Encoder is placeholder_cnn; use model_name: birdnet with a valid BirdNET .tflite."
+            )
         self.processed_dir = Path(cfg["data"]["processed_dir"])
         self.embeddings_dir = Path(cfg["data"]["embeddings_dir"])
         self.sample_rate = cfg["audio"]["sample_rate"]
@@ -580,6 +780,9 @@ class EmbeddingPipeline:
                 except Exception as e:
                     logger.error(f"  FAILED {wav_path.name}: {e}")
 
+        if hasattr(self.encoder, "flush_cross_sample_embedding_debug"):
+            self.encoder.flush_cross_sample_embedding_debug()
+
         elapsed = time.time() - t0
         logger.info(
             f"Embedding extraction complete: {processed}/{total_files} segments "
@@ -587,7 +790,64 @@ class EmbeddingPipeline:
         )
 
         manifest_path = store.flush()
+        self._print_embedding_dataset_summary(manifest_path, processed)
         return manifest_path
+
+    def _print_embedding_dataset_summary(self, manifest_path: Path, processed: int) -> None:
+        """Print total embedding count and global mean/std over stored vectors."""
+        n_manifest = 0
+        if manifest_path.is_file():
+            with open(manifest_path, newline="", encoding="utf-8") as f:
+                n_manifest = sum(1 for _ in csv.DictReader(f))
+
+        print(
+            f"\n[Embedding summary] encoder={self.encoder.name!r} | "
+            f"segments_written={processed} | manifest_rows={n_manifest}"
+        )
+        self._log_manifest_species_counts(manifest_path)
+
+        if n_manifest != processed:
+            print(
+                f"[Embedding summary] WARNING: manifest count ({n_manifest}) != "
+                f"processed count ({processed})."
+            )
+
+        embs, _, _ = load_all_embeddings(self.embeddings_dir)
+        if embs.size == 0:
+            print("[Embedding summary] No vectors loaded for mean/std (empty HDF5).")
+            return
+
+        g_mean = float(np.mean(embs))
+        g_std = float(np.std(embs))
+        print(
+            f"[Embedding summary] total_embedding_vectors={len(embs)} | "
+            f"dim={embs.shape[1]} | global_mean={g_mean:.6f} | global_std={g_std:.6f}"
+        )
+
+    @staticmethod
+    def _log_manifest_species_counts(manifest_path: Path) -> None:
+        """Spot-check manifest for `noise` vs bird species (binary pipeline)."""
+        if not manifest_path.is_file():
+            return
+        with open(manifest_path, newline="", encoding="utf-8") as f:
+            rows = list(csv.DictReader(f))
+        if not rows:
+            return
+        species_col = "species"
+        if species_col not in rows[0]:
+            return
+        counts = Counter(r[species_col] for r in rows)
+        n_noise = counts.get("noise", 0)
+        n_other = sum(v for k, v in counts.items() if k != "noise")
+        print(
+            f"[Embedding summary] manifest species: noise={n_noise}, "
+            f"bird_and_species={n_other}, total_rows={len(rows)}"
+        )
+        if n_noise == 0:
+            print(
+                "[Embedding summary] WARNING: no manifest rows with species='noise'. "
+                "Use raw_dir/noise/ (lowercase), then preprocess → embed again."
+            )
 
     # ── Private ────────────────────────────────────────────
 

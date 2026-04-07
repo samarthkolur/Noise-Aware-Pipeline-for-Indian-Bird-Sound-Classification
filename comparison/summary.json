@@ -1,0 +1,58 @@
+{
+  "experiment_fingerprint": "9ad165a5e05278b7",
+  "overlap_tau": 0.5,
+  "segment_alignment_path": "C:\\Users\\yasha\\Desktop\\birdnet samrath\\Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification\\comparison\\segment_alignment.parquet",
+  "figures": [
+    "C:\\Users\\yasha\\Desktop\\birdnet samrath\\Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification\\comparison\\figures\\detection_counts.png",
+    "C:\\Users\\yasha\\Desktop\\birdnet samrath\\Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification\\comparison\\figures\\species_richness.png",
+    "C:\\Users\\yasha\\Desktop\\birdnet samrath\\Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification\\comparison\\figures\\false_positive_proxy.png",
+    "C:\\Users\\yasha\\Desktop\\birdnet samrath\\Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification\\comparison\\figures\\confidence_distribution.png",
+    "C:\\Users\\yasha\\Desktop\\birdnet samrath\\Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification\\comparison\\figures\\retained_bird_recall.png"
+  ],
+  "metrics": {
+    "segment_counts": {
+      "total": 4494,
+      "bird": 2936,
+      "noise": 901,
+      "uncertain": 657
+    },
+    "detection_counts": {
+      "baseline_sum_all_segments": 0,
+      "baseline_sum_bird_segments_only": 0,
+      "baseline_sum_noise_segments_fp_proxy": 0,
+      "filtered_sum_clean_bird_segments": 0,
+      "detection_reduction_rate_overall": null,
+      "detection_rate_on_bird_segments_baseline_vs_filtered": null
+    },
+    "species_richness": {
+      "unique_species_baseline_all_segments": 0,
+      "unique_species_baseline_bird_segments_only": 0,
+      "unique_species_filtered_clean_birds": 0,
+      "species_reduction_rate_vs_baseline_all": null,
+      "species_reduction_rate_bird_domain_only": null,
+      "jaccard_bird_baseline_vs_filtered": null
+    },
+    "false_positive_proxy": {
+      "baseline_detections_on_noise_segments": 0,
+      "filtered_detections_on_noise_segments": 0,
+      "note": "Filtered arm does not run BirdNET on noise segments; FP proxy compares baseline-on-noise to zero."
+    },
+    "confidence": {
+      "baseline_on_bird_segments": {
+        "mean": 0.0,
+        "median": 0.0,
+        "std": 0.0
+      },
+      "filtered_on_bird_segments": {
+        "mean": 0.0,
+        "median": 0.0,
+        "std": 0.0
+      }
+    },
+    "retained_bird_recall": {
+      "mean_species_recall_per_segment": null,
+      "std_species_recall_per_segment": 0.0,
+      "segments_with_non_empty_baseline": 0
+    }
+  }
+}

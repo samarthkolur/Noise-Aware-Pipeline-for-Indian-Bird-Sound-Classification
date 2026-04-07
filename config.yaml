@@ -42,15 +42,52 @@ noise_reduction:
     high_freq: 15000
 
 # ── Silence Removal (RMS-based) ────────────────────────────
+# Aggressive silence dropping reduces segment count (often far below ~56k if audio is quiet).
+# To retain more segments: lower rms_threshold_db (e.g. -50) or set enabled: false.
 silence_removal:
   enabled: true
   rms_threshold_db: -40.0   # segments below this RMS (dB) are dropped
 
+# ── Pipeline mode (Noise Segregation V2 + routing) ─────────
+# Order: segment → silence drop → V2 score (filtered/full) → save WAVs
+#   baseline  — no filtering (optional manual raw noise/ only)
+#   filtered  — keep only bird (drop V2 noise-like segments)
+#   full      — generate bird + noise (route V2 noise-like segments to processed_dir/noise/)
+pipeline:
+  mode: full                # baseline | filtered | full
+  write_segments_manifest: true   # processed_dir/segments_manifest.csv
+
+noise_segregation:
+  v2:
+    subframe_duration_s: 0.5
+    vote_threshold: 0.3      # subframe votes noise if S >= this (lower → more noise votes)
+    majority_tie: bird       # bird | noise (when 3-3 vote)
+    target_rms_db: -20.0
+    w_zcr: 0.25
+    w_flat: 0.30
+    w_centroid_flag: 0.15
+    w_centroid_std: 0.15
+    w_insect: 0.15
+    zcr_ref: 0.30
+    flatness_ref: 1.0
+    centroid_std_ref: 2500.0
+    centroid_low_hz: 400.0
+    centroid_high_hz: 7000.0
+    insect_lag_min_hz: 200.0
+    insect_lag_max_hz: 2000.0
+    insect_peak_thresh: 0.35
+
 # ── Embedding Model ────────────────────────────────────────
+# BirdNET V2.4 only — file must be named:
+#   BirdNET_GLOBAL_6K_V2.4_Model_FP32.tflite
+# Get it: pip install birdnetlib  OR  download BirdNET-Analyzer-V2.4.zip from
+#   https://birdnet-team.github.io/BirdNET-Analyzer/models.html
+# Place manually under: birdnet_weights/BirdNET_GLOBAL_6K_V2.4_Model_FP32.tflite
+# (Do not use the Python package folder "models/" — that is the MLP code.)
 embedding:
   model_name: birdnet          # birdnet | placeholder
   embedding_dim: 1024          # 1024 (BirdNET V2.4 penultimate layer)
-  birdnet_model_path: auto     # 'auto' = detect from birdnetlib, or set explicit .tflite path
+  birdnet_model_path: auto     # auto = birdnet_weights/ first, else birdnetlib bundle; or set path to .tflite
   batch_size: 64
   num_workers: 4
   storage_format: hdf5        # hdf5 (per-species .h5 + manifest.csv)
@@ -114,3 +151,7 @@ mining:
   active_learning:
     strategy: uncertainty     # uncertainty | margin | entropy
     query_budget: 100
+
+# ── Evaluation (evaluate.py) ────────────────────────────────
+evaluation:
+  results_dir: ./results      # metrics.json and optional plots
