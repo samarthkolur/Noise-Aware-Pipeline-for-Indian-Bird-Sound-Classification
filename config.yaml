@@ -111,6 +111,16 @@ model:
   hidden_dims: [512, 256]
   dropout: 0.3
 
+# ── Autoencoder (reconstruction-error gating) ──────────────
+autoencoder:
+  enabled: true              # enable AE gating in inference + evaluation
+  train: true                # train AE during the train stage
+  epochs: 30
+  learning_rate: 0.001
+  batch_size: 64
+  checkpoint_path: ./checkpoints/autoencoder.pt
+  recon_threshold: auto      # 'auto' = P95 from training, or float (e.g. 0.01)
+
 # ── Training ───────────────────────────────────────────────
 training:
   epochs: 50

@@ -22,6 +22,7 @@ import torch.nn.functional as F
 from tqdm import tqdm
 
 from embedding.embedding import build_encoder
+from models.autoencoder import EmbeddingAutoencoder
 from models.classifier import EmbeddingClassifier
 from preprocessing.preprocessing import Preprocessor, SegmentMeta
 from utils.logger import get_logger
@@ -72,6 +73,9 @@ class Predictor:
         # 3. Classifier + Label Map
         self.classifier, self.label_map, self.binary = self._load_model(cfg)
         self.inv_label_map = {v: k for k, v in self.label_map.items()}
+
+        # 4. Autoencoder (optional reconstruction-error gating)
+        self.autoencoder, self.recon_threshold = self._load_autoencoder(cfg)
 
     # ── Public API ──────────────────────────────────────────
 
@@ -129,25 +133,38 @@ class Predictor:
                 # 2. Extract embedding
                 waveform, sr = self._load_wav_fast(seg_wav_path)
                 emb_np = self.encoder.encode(waveform, sr)
-                
-                # 3. Classify with three-class routing
-                emb_pt = torch.from_numpy(emb_np).unsqueeze(0).to(self.device)
-                decision, top_species, prob = self._classify_segment(emb_pt)
+                emb_pt = torch.from_numpy(emb_np).unsqueeze(0).to(self.device, non_blocking=True)
+
+                # 3. Autoencoder gating (if enabled)
+                recon_error = None
+                ae_rejected = False
+                if self.autoencoder is not None:
+                    recon_error = self._compute_recon_error(emb_pt)
+                    if recon_error > self.recon_threshold:
+                        ae_rejected = True
+
+                # 4. Classify with three-class routing
+                if ae_rejected:
+                    decision, top_species, prob = "noise", "noise", 0.0
+                else:
+                    decision, top_species, prob = self._classify_segment(emb_pt)
                 
                 res = {
                     "source_file": meta.source_file,
                     "segment_index": meta.segment_index,
                     "start_sec": meta.start_sec,
                     "end_sec": meta.end_sec,
-                    "decision": decision,  # "bird", "noise", or "uncertain"
+                    "decision": decision,
                     "is_bird": decision == "bird",
                     "predicted_species": top_species,
                     "confidence": float(prob),
                     "threshold_used": self.conf_thresh,
+                    "recon_error": float(recon_error) if recon_error is not None else None,
+                    "recon_error_rejected": ae_rejected,
                     "tmp_wav_path": seg_wav_path,
                 }
                 
-                # 4. Route audio
+                # 5. Route audio
                 if decision == "bird":
                     target_dir = self.birds_dir
                 elif decision == "noise":
@@ -273,6 +290,58 @@ class Predictor:
         logger.info(f"Loaded classifier from {chkpt_path} (binary={binary})")
         return classifier, label_map, binary
 
+    def _load_autoencoder(self, cfg: dict) -> Tuple:
+        """Load autoencoder for reconstruction-error gating (if enabled).
+
+        Returns:
+            (autoencoder_model_or_None, recon_threshold)
+        """
+        ae_cfg = cfg.get("autoencoder", {})
+        if not ae_cfg.get("enabled", False):
+            return None, 0.0
+
+        chkpt_path = Path(ae_cfg.get("checkpoint_path", "./checkpoints/autoencoder.pt"))
+        meta_path = chkpt_path.with_name("autoencoder_meta.json")
+
+        if not chkpt_path.exists():
+            logger.warning(
+                f"Autoencoder enabled but checkpoint not found at {chkpt_path}. "
+                "Falling back to classifier-only mode."
+            )
+            return None, 0.0
+
+        emb_dim = int(cfg["embedding"]["embedding_dim"])
+        ae = EmbeddingAutoencoder(input_dim=emb_dim).to(self.device)
+        chk = torch.load(chkpt_path, map_location=self.device, weights_only=True)
+        ae.load_state_dict(chk["model_state_dict"])
+        ae.eval()
+
+        # Load reconstruction threshold
+        thresh_cfg = ae_cfg.get("recon_threshold", "auto")
+        if thresh_cfg == "auto" and meta_path.exists():
+            with open(meta_path, "r") as f:
+                meta = json.load(f)
+            threshold = float(meta.get("recon_threshold", 0.01))
+            logger.info(f"AE gating: threshold={threshold:.6f} (from training)")
+        elif isinstance(thresh_cfg, (int, float)):
+            threshold = float(thresh_cfg)
+            logger.info(f"AE gating: threshold={threshold:.6f} (from config)")
+        else:
+            threshold = 0.01
+            logger.info(f"AE gating: threshold={threshold:.6f} (default)")
+
+        logger.info(f"Loaded autoencoder from {chkpt_path}")
+        return ae, threshold
+
+    @torch.no_grad()
+    def _compute_recon_error(self, embedding: torch.Tensor) -> float:
+        """Compute reconstruction error for a single embedding."""
+        reconstructed, _ = self.autoencoder(embedding)
+        error = EmbeddingAutoencoder.compute_reconstruction_error(
+            embedding, reconstructed
+        )
+        return error.item()
+
     @staticmethod
     def _load_wav_fast(path: Path) -> Tuple:
         """Load temporary WAV file using soundfile."""
@@ -285,5 +354,8 @@ class Predictor:
     def _resolve_device(cfg: dict) -> torch.device:
         device_str = cfg.get("project", {}).get("device", "auto")
         if device_str == "auto":
-            return torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        return torch.device(device_str)
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        else:
+            device = torch.device(device_str)
+        logger.info(f"Using device: {device}")
+        return device

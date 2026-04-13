@@ -10,11 +10,10 @@ mining.py — Hard negative mining and dataset update loops.
 import json
 import shutil
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 import h5py
 import numpy as np
-import pandas as pd
 import torch
 from tqdm import tqdm
 
@@ -86,7 +85,7 @@ class Miner:
 
         logger.info(f"Mining complete ✓ Exported {fp_count} false positives to {export_dir}")
 
-    def mine_false_negatives(self, noise_dir: Path = None, export_dir: Path = None) -> None:
+    def mine_false_negatives(self, noise_dir: Optional[Path] = None, export_dir: Optional[Path] = None) -> None:
         """Re-run inference on segments in outputs/noise/ to find false negatives.
 
         False negatives are bird sounds that were incorrectly routed to noise/.
@@ -155,7 +154,7 @@ class Miner:
             f"in {export_dir}"
         )
 
-    def mine_uncertain(self, export_dir: Path = None) -> None:
+    def mine_uncertain(self, export_dir: Optional[Path] = None) -> None:
         """Export all uncertain-classified segments for manual review.
 
         Args:
@@ -230,23 +229,43 @@ class Miner:
         logger.info("Dataset update complete ✓ (ready for re-training)")
 
     def _update_manifest(self, emb_dir: Path) -> None:
-        """Rebuild the global manifest CSV from all HDF5 files."""
+        """Rebuild the global manifest CSV using the canonical schema from EmbeddingStore.
+
+        Columns match exactly what EmbeddingDataset.from_manifest() expects:
+            species, source_file, segment_index, embedding_dim,
+            model_name, sample_rate, duration_sec, hdf5_path, hdf5_row
+        """
+        import csv
+
         rows = []
-        for h5_path in emb_dir.rglob("embeddings.h5"):
+        for h5_path in sorted(emb_dir.rglob("embeddings.h5")):
             species = h5_path.parent.name
             with h5py.File(h5_path, "r") as h5f:
                 filenames = h5f["filenames"][:]
-                for i, fn in enumerate(filenames):
-                    rows.append({
-                        "species": species,
-                        "source_file": fn.decode("utf-8") if isinstance(fn, bytes) else fn,
-                        "h5_path": str(h5_path.relative_to(emb_dir)),
-                        "h5_index": i
-                    })
-                    
-        df = pd.DataFrame(rows)
+                n = len(filenames)
+            for i, fn in enumerate(filenames):
+                rows.append({
+                    "species": species,
+                    "source_file": fn.decode("utf-8") if isinstance(fn, bytes) else fn,
+                    "segment_index": i,
+                    "embedding_dim": self.cfg["embedding"]["embedding_dim"],
+                    "model_name": "birdnet_v2.4",
+                    "sample_rate": self.cfg["audio"]["sample_rate"],
+                    "duration_sec": self.cfg["audio"]["segment_duration_s"],
+                    "hdf5_path": str(h5_path),
+                    "hdf5_row": i,
+                })
+
+        fieldnames = [
+            "species", "source_file", "segment_index", "embedding_dim",
+            "model_name", "sample_rate", "duration_sec", "hdf5_path", "hdf5_row",
+        ]
         manifest_path = emb_dir / "manifest.csv"
-        df.to_csv(manifest_path, index=False)
+        with open(manifest_path, "w", newline="", encoding="utf-8") as f:
+            w = csv.DictWriter(f, fieldnames=fieldnames)
+            w.writeheader()
+            w.writerows(rows)
+        logger.info(f"Manifest rebuilt → {manifest_path} ({len(rows)} rows)")
 
 
 def _init_h5(path: Path, dim: int) -> None:

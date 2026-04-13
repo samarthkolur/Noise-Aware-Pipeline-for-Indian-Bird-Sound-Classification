@@ -11,9 +11,9 @@ import yaml
 _DEFAULTS: Dict[str, Any] = {
     "project": {"name": "bioacoustic_pipeline", "seed": 42, "device": "auto"},
     "audio": {
-        "sample_rate": 32000,
+        "sample_rate": 48000,  # BirdNET V2.4 requires 48 kHz
         "segment_duration_s": 3.0,
-        "overlap": 0.5,
+        "overlap": 0.0,        # Non-overlapping segments (matches preprocessing logic)
         "mono": True,
     },
 }

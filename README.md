@@ -211,22 +211,32 @@ The mining stage automates step 2 by scanning `noise/` for potential false negat
 ## Project Structure
 
 ```
-├── config.yaml              # Central configuration
-├── run_pipeline.py          # CLI entry-point (all stages)
-├── evaluate.py              # Standalone text evaluation + metrics JSON
-├── evaluate_visual.py       # Plots (heatmap, bar charts) + metrics JSON → results/
-├── clean_pipeline_outputs.py  # Optional: delete processed/embeddings/checkpoints
-├── requirements.txt
+├── config.yaml                          # Central configuration
+├── run_pipeline.py                      # CLI entry-point (all stages)
+├── evaluate.py                          # Standalone text evaluation + metrics JSON
+├── evaluate_visual.py                   # Plots (heatmap, bar charts) + metrics JSON → results/
+├── clean_pipeline_outputs.py            # Optional: delete processed/embeddings/checkpoints
+├── requirements.txt                     # Core pipeline dependencies
+├── requirements-birdnet-analyzer.txt    # Official BirdNET-Analyzer dependencies
+├── requirements-birdnet-integration.txt # Additional integration dependencies
 │
-├── preprocessing/           # Segmentation, silence removal, Noise Segregation V2
-├── tests/                   # Unit tests (e.g. V2 scoring)
-├── embedding/               # BirdNET TFLite encoder, HDF5 storage
-├── dataset/                 # PyTorch Dataset, splits, class weighting
-├── models/                  # MLP classifier architecture
-├── training/                # Training loop, metrics, threshold optimization
-├── inference/               # Three-class predictor + routing
-├── mining/                  # False positive/negative mining, dataset update
-└── utils/                   # Config loader, logger
+├── birdnet_integration/       # Tools for integrating and comparing BirdNET predictions
+├── birdnet_weights/           # Manually downloaded BirdNET TFLite models
+├── checkpoints/               # Trained model checkpoints
+├── comparison/                # Outputs of baseline vs filtered comparison scripts
+├── data/                      # Auto-generated processed audio chunks + embeddings
+├── dataset/                   # PyTorch Dataset, splits, class weighting
+├── embedding/                 # BirdNET TFLite encoder, HDF5 storage
+├── iBC53/                     # Default input directory for raw audio files by species
+├── inference/                 # Three-class predictor + routing
+├── mining/                    # False positive/negative mining, dataset update
+├── models/                    # MLP classifier architecture
+├── outputs/                   # Inference sorted files (clean_birds/, noise/, uncertain/)
+├── preprocessing/             # Segmentation, silence removal, Noise Segregation V2
+├── results/                   # Evaluation metrics, confusion matrix, and threshold plots
+├── tests/                     # Unit tests (e.g. V2 scoring)
+├── training/                  # Training loop, metrics, threshold optimization
+└── utils/                     # Config loader, logger
 ```
 
 ---

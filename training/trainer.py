@@ -223,8 +223,11 @@ class Trainer:
     def _resolve_device(cfg: dict) -> torch.device:
         s = cfg.get("project", {}).get("device", "auto")
         if s == "auto":
-            return torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        return torch.device(s)
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        else:
+            device = torch.device(s)
+        logger.info(f"Using device: {device}")
+        return device
 
     def _forward_loss(
         self, logits: torch.Tensor, labels: torch.Tensor
@@ -234,18 +237,18 @@ class Trainer:
             y = _bce_targets(labels, lg.device)
             if isinstance(self.loss_fn, BinaryFocalLoss):
                 return self.loss_fn(lg, y)
-            pw = self._bce_pos_weight.to(device=lg.device, dtype=lg.dtype)
+            pw = self._bce_pos_weight.to(device=lg.device, dtype=lg.dtype, non_blocking=True)
             return F.binary_cross_entropy_with_logits(lg, y, pos_weight=pw)
         assert self.loss_fn is not None
-        return self.loss_fn(logits, labels.to(self.device).long())
+        return self.loss_fn(logits, labels.to(self.device, non_blocking=True).long())
 
     def _train_epoch(self) -> float:
         self.model.train()
         total_loss = 0.0
         n_batches = 0
         for emb, labels in self.train_loader:
-            emb = emb.to(self.device)
-            labels = labels.to(self.device)
+            emb = emb.to(self.device, non_blocking=True)
+            labels = labels.to(self.device, non_blocking=True)
             self.optimizer.zero_grad(set_to_none=True)
             logits = self.model(emb)
             loss = self._forward_loss(logits, labels)
@@ -265,8 +268,8 @@ class Trainer:
         all_labels: List[torch.Tensor] = []
 
         for emb, labels in loader:
-            emb = emb.to(self.device)
-            labels = labels.to(self.device)
+            emb = emb.to(self.device, non_blocking=True)
+            labels = labels.to(self.device, non_blocking=True)
             logits = self.model(emb)
             loss = self._forward_loss(logits, labels)
             total_loss += float(loss.item())
@@ -346,7 +349,7 @@ class Trainer:
         self.model.eval()
         outs, ys = [], []
         for emb, labels in loader:
-            emb = emb.to(self.device)
+            emb = emb.to(self.device, non_blocking=True)
             logits = self.model(emb)
             if self.binary and logits.ndim > 1:
                 logits = logits.squeeze(-1)

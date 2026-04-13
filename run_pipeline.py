@@ -40,13 +40,23 @@ def run_embed(cfg: dict) -> None:
 
 
 def run_train(cfg: dict) -> None:
-    """Stage 3: Train classifier."""
+    """Stage 3: Train classifier (+ optional autoencoder)."""
     from training.trainer import Trainer
 
     logger.info("═══ Stage: Training ═══")
     trainer = Trainer(cfg)
     trainer.fit()
     logger.info("Training complete ✓")
+
+    # Autoencoder training (if enabled)
+    ae_cfg = cfg.get("autoencoder", {})
+    if ae_cfg.get("train", False):
+        from training.autoencoder_trainer import AutoencoderTrainer
+
+        logger.info("═══ Stage: Autoencoder Training ═══")
+        ae_trainer = AutoencoderTrainer(cfg)
+        ae_trainer.fit()
+        logger.info("Autoencoder training complete ✓")
 
 
 def run_infer(cfg: dict) -> None:

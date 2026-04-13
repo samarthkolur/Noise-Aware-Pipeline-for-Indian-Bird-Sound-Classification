@@ -17,6 +17,7 @@ import torch
 from torch.utils.data import DataLoader, Subset
 
 from dataset.dataset import EmbeddingDataset, create_splits
+from models.autoencoder import EmbeddingAutoencoder
 from models.classifier import EmbeddingClassifier
 from training.metrics import (
     compute_binary_per_class_metrics,
@@ -46,8 +47,9 @@ def evaluate(cfg: dict) -> None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     else:
         device = torch.device(device_str)
+    logger.info(f"Using device: {device}")
 
-    binary = cfg.get("model", {}).get("binary", False)
+    binary = cfg.get("model", {}).get("binary", True)
 
     # 1. Load dataset and get test split
     embeddings_dir = Path(cfg["data"]["embeddings_dir"])
@@ -100,7 +102,7 @@ def evaluate(cfg: dict) -> None:
 
     with torch.no_grad():
         for embs, labels in test_loader:
-            embs = embs.to(device)
+            embs = embs.to(device, non_blocking=True)
             logits = model(embs)
             if binary and logits.ndim > 1:
                 logits = logits.squeeze(-1)
@@ -224,6 +226,69 @@ def evaluate(cfg: dict) -> None:
               f"mean_prob={bird_probs.mean():.4f}, std={bird_probs.std():.4f}")
         print(f"  Noise samples: n={len(noise_probs)}, "
               f"mean_prob={noise_probs.mean():.4f}, std={noise_probs.std():.4f}")
+
+    # ── Autoencoder reconstruction error (if enabled) ────────────
+    ae_cfg = cfg.get("autoencoder", {})
+    if ae_cfg.get("enabled", False):
+        ae_chkpt = Path(ae_cfg.get("checkpoint_path", "./checkpoints/autoencoder.pt"))
+        ae_meta_path = ae_chkpt.with_name("autoencoder_meta.json")
+        if ae_chkpt.exists():
+            emb_dim = int(cfg["embedding"]["embedding_dim"])
+            ae_model = EmbeddingAutoencoder(input_dim=emb_dim).to(device)
+            ae_chk = torch.load(ae_chkpt, map_location=device, weights_only=True)
+            ae_model.load_state_dict(ae_chk["model_state_dict"])
+            ae_model.eval()
+
+            ae_threshold = 0.01
+            if ae_meta_path.exists():
+                with open(ae_meta_path, "r") as f:
+                    ae_meta = json.load(f)
+                ae_threshold = float(ae_meta.get("recon_threshold", 0.01))
+
+            bird_errors, noise_errors = [], []
+            with torch.no_grad():
+                for embs_batch, labels_batch in test_loader:
+                    embs_batch = embs_batch.to(device, non_blocking=True)
+                    recon, _ = ae_model(embs_batch)
+                    errors = EmbeddingAutoencoder.compute_reconstruction_error(
+                        embs_batch, recon
+                    ).cpu()
+                    for err_val, lbl in zip(errors.tolist(), labels_batch.tolist()):
+                        if lbl == 1:
+                            bird_errors.append(err_val)
+                        else:
+                            noise_errors.append(err_val)
+
+            import numpy as np_ae
+
+            recon_report = {
+                "bird_mean": float(np_ae.mean(bird_errors)) if bird_errors else None,
+                "bird_std": float(np_ae.std(bird_errors)) if bird_errors else None,
+                "noise_mean": float(np_ae.mean(noise_errors)) if noise_errors else None,
+                "noise_std": float(np_ae.std(noise_errors)) if noise_errors else None,
+                "threshold": ae_threshold,
+            }
+            metrics_payload["reconstruction_error"] = recon_report
+
+            print("\n--- Autoencoder Reconstruction Error ---")
+            if bird_errors:
+                print(
+                    f"  Bird  samples: n={len(bird_errors)}, "
+                    f"mean_err={recon_report['bird_mean']:.6f}, "
+                    f"std={recon_report['bird_std']:.6f}"
+                )
+            if noise_errors:
+                print(
+                    f"  Noise samples: n={len(noise_errors)}, "
+                    f"mean_err={recon_report['noise_mean']:.6f}, "
+                    f"std={recon_report['noise_std']:.6f}"
+                )
+            print(f"  Threshold:     {ae_threshold:.6f}")
+        else:
+            logger.warning(
+                f"Autoencoder enabled but checkpoint not found at {ae_chkpt}. "
+                "Skipping reconstruction error metrics."
+            )
 
     results_dir = Path(cfg.get("evaluation", {}).get("results_dir", "results"))
     results_dir.mkdir(parents=True, exist_ok=True)
