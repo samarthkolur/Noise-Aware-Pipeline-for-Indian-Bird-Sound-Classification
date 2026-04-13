@@ -1,198 +1,370 @@
+#!/usr/bin/env python3
+"""
+compute_baseline_metrics.py
+Compare BirdNET baseline vs Noise-Aware Pipeline.
+
+Baseline predictions: comparison/baseline_normalized.jsonl (confidence thresholded)
+Pipeline metrics:     recomputed from trained classifier on test split
+Ground truth:         data/embeddings/manifest.csv (noise/ → 0, species → 1)
+
+Key mapping fix: noise segments in the manifest are filed under
+  data/processed/noise/{OrigSpecies}__{OrigFileNum}_segXXXX.wav
+but BirdNET JSONL keys use the original path structure:
+  iBC53/{OrigSpecies}/{OrigFileNum}.wav
+The loader recovers the original (species, filenum, seg_idx) key for noise entries.
+"""
+
 import json
 import argparse
 from pathlib import Path
+from collections import Counter
+
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-def main():
-    parser = argparse.ArgumentParser(description="Evaluate Baseline Metrics Efficiently and Generate Graphs")
-    parser.add_argument("--manifest", type=str, default="data/embeddings/manifest.csv")
-    parser.add_argument("--baseline", type=str, default="comparison/baseline_normalized.jsonl")
-    parser.add_argument("--pipeline_metrics", type=str, default="results/metrics.json")
-    parser.add_argument("--threshold", type=float, default=0.1)
-    args = parser.parse_args()
 
-    # Load Ground Truth
+def load_ground_truth(manifest_path: str) -> dict:
+    """Load binary labels keyed to match BirdNET JSONL structure.
+
+    Bird segments:  key = (species_folder, file_stem, seg_idx)
+    Noise segments: filename encodes original source as SpeciesName__FileNum;
+                    key = (OrigSpecies, OrigFileNum, seg_idx) to align with JSONL.
+    """
     ground_truth = {}
-    total_manifest = 0
-    with open(args.manifest, "r", encoding="utf-8") as f:
-        header = f.readline()
+    parse_warnings = 0
+    with open(manifest_path, "r", encoding="utf-8") as f:
+        f.readline()
         for line in f:
             parts = line.strip().split(",")
-            if len(parts) < 8: continue
-            
-            species_col = parts[0]
+            if len(parts) < 3:
+                continue
+            species = parts[0]
             src_file = parts[1]
             seg_idx = int(parts[2])
-            
-            label = 0 if species_col.lower() == "noise" else 1
+
+            label = 0 if species.lower() == "noise" else 1
 
             p = Path(src_file)
             folder = p.parent.name
             file_stem = p.name.split("_seg")[0]
-            
-            key = (folder, file_stem, seg_idx)
+
+            if label == 0 and "__" in file_stem:
+                orig_species, orig_filenum = file_stem.rsplit("__", 1)
+                key = (orig_species, orig_filenum, seg_idx)
+            else:
+                key = (folder, file_stem, seg_idx)
+
+            if key in ground_truth and ground_truth[key] != label:
+                parse_warnings += 1
             ground_truth[key] = label
-            total_manifest += 1
 
-    # Load Baseline Predictions
+    if parse_warnings:
+        print(f"  ⚠ {parse_warnings} key collisions between bird/noise segments")
+    return ground_truth
+
+
+def load_baseline_predictions(jsonl_path: str) -> dict:
+    """Load BirdNET detections, keyed by (folder, file_stem, seg_idx).
+    Multiple detections per segment → keep max confidence."""
     predictions = {}
-    with open(args.baseline, "r", encoding="utf-8") as f:
+    with open(jsonl_path, "r", encoding="utf-8") as f:
         for line in f:
-            if not line.strip(): continue
-            d = json.loads(line)
-            
-            # Fix backslashes for cross-platform parsing
-            src_path_str = d["source_file"].replace("\\\\", "/").replace("\\", "/")
-            parts = src_path_str.split("/")
-            
-            if len(parts) >= 2:
-                folder = parts[-2]
-                file_stem = parts[-1].split(".")[0]
-            else:
+            if not line.strip():
                 continue
-            
-            start_sec = float(d["start_sec"])
-            seg_idx = int(start_sec // 3)
+            d = json.loads(line)
+            src = d["source_file"].replace("\\", "/")
+            parts = src.split("/")
+            if len(parts) < 2:
+                continue
+            folder = parts[-2]
+            file_stem = parts[-1].split(".")[0]
+            seg_idx = int(float(d["start_sec"]) // 3)
             conf = float(d["confidence"])
-            
+
             key = (folder, file_stem, seg_idx)
-            
-            if key not in predictions:
-                predictions[key] = conf
-            else:
-                predictions[key] = max(predictions[key], conf)
-                
-    y_true = []
-    y_pred = []
-    
-    matched = 0
-    
-    for key, lbl in ground_truth.items():
-        conf = predictions.get(key, 0.0)
-        pred = 1 if conf > args.threshold else 0
-        
-        y_true.append(lbl)
-        y_pred.append(pred)
-        
-        if key in predictions:
-            matched += 1
-            
-    # Compute Baseline Metrics
-    tp, tn, fp, fn = 0, 0, 0, 0
-    for t, p in zip(y_true, y_pred):
-        if t == 1 and p == 1: tp += 1
-        elif t == 1 and p == 0: fn += 1
-        elif t == 0 and p == 1: fp += 1
-        elif t == 0 and p == 0: tn += 1
-        
-    base_acc = (tp + tn) / (tp + tn + fp + fn) if (tp+tn+fp+fn) > 0 else 0
-    base_prec = tp / (tp + fp) if (tp + fp) > 0 else 0
-    base_rec = tp / (tp + fn) if (tp + fn) > 0 else 0
-    base_f1 = 2 * (base_prec * base_rec) / (base_prec + base_rec) if (base_prec + base_rec) > 0 else 0
-    
-    base_fpr = fp / (fp + tn) if (fp + tn) > 0 else 0
-    base_fnr = fn / (fn + tp) if (fn + tp) > 0 else 0
+            predictions[key] = max(predictions.get(key, 0.0), conf)
+    return predictions
 
-    print(f"Matched {matched} pipeline segments with baseline detections.")
-    print("\\n--- Baseline Metrics (Threshold=%.2f) ---" % args.threshold)
-    print(f"Accuracy:  {base_acc:.4f} | Precision: {base_prec:.4f} | Recall: {base_rec:.4f} | F1: {base_f1:.4f}")
-    
-    # Load Pipeline Metrics
-    pipe_acc = 0.9214
-    pipe_prec = 0.9446
-    pipe_rec = 0.9579
-    pipe_f1 = 0.9512
-    pipe_fpr = 0.2234 # from previous knowledge or estimate based on FPR, let's read it properly if possible
-    # We can try to load precise metrics from metrics.json
-    try:
-        with open(args.pipeline_metrics, "r") as f:
-            pm = json.load(f)
-            b = pm.get("best_threshold", pm.get("metrics_at_optimal_f1", {}))
-            if b:
-                pipe_acc = b.get("accuracy", pipe_acc)
-                pipe_prec = b.get("precision", pipe_prec)
-                pipe_rec = b.get("recall", pipe_rec)
-                pipe_f1 = b.get("f1", pipe_f1)
-                if "per_class_optimal_f1" in pm and "fpr_noise" in pm["per_class_optimal_f1"]:
-                    pipe_fpr = pm["per_class_optimal_f1"]["fpr_noise"]
-    except Exception as e:
-        print(f"Could not load precise pipeline metrics: {e}, using defaults.")
 
-    print("\\n--- Pipeline Metrics ---")
-    print(f"Accuracy:  {pipe_acc:.4f} | Precision: {pipe_prec:.4f} | Recall: {pipe_rec:.4f} | F1: {pipe_f1:.4f}")
+def compute_confusion(y_true, y_pred):
+    tp = sum(1 for t, p in zip(y_true, y_pred) if t == 1 and p == 1)
+    tn = sum(1 for t, p in zip(y_true, y_pred) if t == 0 and p == 0)
+    fp = sum(1 for t, p in zip(y_true, y_pred) if t == 0 and p == 1)
+    fn = sum(1 for t, p in zip(y_true, y_pred) if t == 1 and p == 0)
+    return tp, tn, fp, fn
 
-    # Generate Graphs
-    Path("results/comparison_graphs").mkdir(parents=True, exist_ok=True)
-    
-    metrics = ["Accuracy", "Precision", "Recall", "F1 Score"]
-    baseline_vals = [base_acc, base_prec, base_rec, base_f1]
-    pipeline_vals = [pipe_acc, pipe_prec, pipe_rec, pipe_f1]
-    
-    x = np.arange(len(metrics))
-    width = 0.35
-    
+
+def metrics_from_confusion(tp, tn, fp, fn):
+    total = tp + tn + fp + fn
+    acc = (tp + tn) / total if total else 0
+    prec = tp / (tp + fp) if (tp + fp) else 0
+    rec = tp / (tp + fn) if (tp + fn) else 0
+    f1 = 2 * prec * rec / (prec + rec) if (prec + rec) else 0
+    fpr = fp / (fp + tn) if (fp + tn) else 0
+    fnr = fn / (fn + tp) if (fn + tp) else 0
+    return dict(accuracy=acc, precision=prec, recall=rec, f1=f1, fpr=fpr, fnr=fnr,
+                tp=tp, tn=tn, fp=fp, fn=fn)
+
+
+def compute_pipeline_metrics(config_path: str = "config.yaml") -> dict:
+    """Recompute pipeline metrics from the trained classifier on the test split."""
+    import torch
+    from dataset.dataset import EmbeddingDataset, create_splits
+    from models.classifier import EmbeddingClassifier
+    from torch.utils.data import DataLoader, Subset
+    from sklearn.metrics import confusion_matrix as sklearn_cm
+
+    cfg_mod = __import__("utils.config", fromlist=["load_config"])
+    cfg = cfg_mod.load_config(config_path)
+    device = torch.device("cpu")
+
+    ds = EmbeddingDataset.from_manifest(
+        Path(cfg["data"]["embeddings_dir"]) / "manifest.csv", binary=True)
+    splits = create_splits(ds, val_frac=0.15, test_frac=0.10, stratify=True, seed=42)
+    test_sub = Subset(ds, splits.test_idx)
+    loader = DataLoader(test_sub, batch_size=64, shuffle=False)
+
+    model = EmbeddingClassifier(
+        input_dim=cfg["embedding"]["embedding_dim"],
+        num_classes=1,
+        hidden_dims=cfg["model"].get("hidden_dims", [512, 256]),
+    ).to(device)
+    chk = torch.load("checkpoints/best_model.pt", map_location=device, weights_only=True)
+    model.load_state_dict(chk["model_state_dict"])
+    model.eval()
+
+    all_logits, all_labels = [], []
+    with torch.no_grad():
+        for embs, labels in loader:
+            logits = model(embs.to(device))
+            if logits.ndim > 1:
+                logits = logits.squeeze(-1)
+            all_logits.append(logits.cpu())
+            all_labels.append(labels.cpu())
+
+    logits_t = torch.cat(all_logits)
+    labels_t = torch.cat(all_labels)
+    probs = torch.sigmoid(logits_t).numpy()
+    y = labels_t.numpy()
+    preds = (probs > 0.5).astype(int)
+
+    tn, fp, fn, tp = sklearn_cm(y, preds).ravel()
+    total = int(tn + fp + fn + tp)
+    result = metrics_from_confusion(int(tp), int(tn), int(fp), int(fn))
+    n_noise = int((y == 0).sum())
+    n_bird = int((y == 1).sum())
+    return result, n_noise, n_bird
+
+
+def plot_metrics_comparison(baseline: dict, pipeline: dict, out_path: str):
+    labels = ["Accuracy", "Precision", "Recall", "F1 Score"]
+    b_vals = [baseline[k] for k in ("accuracy", "precision", "recall", "f1")]
+    p_vals = [pipeline[k] for k in ("accuracy", "precision", "recall", "f1")]
+
+    x = np.arange(len(labels))
+    w = 0.35
+
     fig, ax = plt.subplots(figsize=(10, 6))
-    bars1 = ax.bar(x - width/2, baseline_vals, width, label='Baseline (Raw BirdNET)', color='#4C72B0')
-    bars2 = ax.bar(x + width/2, pipeline_vals, width, label='Noise-Aware Pipeline', color='#55A868')
-    
-    ax.set_ylabel('Scores', fontsize=12)
-    ax.set_title('Performance Comparison: Raw BirdNET vs. Noise-Aware Pipeline', fontsize=14, pad=15)
+    bars_b = ax.bar(x - w / 2, b_vals, w, label="Baseline (Raw BirdNET)", color="#4C72B0")
+    bars_p = ax.bar(x + w / 2, p_vals, w, label="Noise-Aware Pipeline", color="#55A868")
+
+    ax.set_ylabel("Score", fontsize=12)
+    ax.set_title("Performance: Raw BirdNET vs Noise-Aware Pipeline", fontsize=14, pad=15)
     ax.set_xticks(x)
-    ax.set_xticklabels(metrics, fontsize=12)
+    ax.set_xticklabels(labels, fontsize=12)
     ax.legend(fontsize=11)
-    ax.set_ylim(0, 1.1)
-    
-    # Add text over bars
-    for bars in [bars1, bars2]:
+    ax.set_ylim(0, 1.15)
+
+    for bars in (bars_b, bars_p):
         for bar in bars:
-            height = bar.get_height()
-            ax.annotate(f'{height:.3f}',
-                        xy=(bar.get_x() + bar.get_width() / 2, height),
-                        xytext=(0, 3),  
-                        textcoords="offset points",
-                        ha='center', va='bottom', fontsize=10)
-    
+            h = bar.get_height()
+            ax.annotate(f"{h:.3f}", xy=(bar.get_x() + bar.get_width() / 2, h),
+                        xytext=(0, 3), textcoords="offset points",
+                        ha="center", va="bottom", fontsize=10)
+
     fig.tight_layout()
-    metrics_path = "results/comparison_graphs/metrics_comparison.png"
-    plt.savefig(metrics_path, dpi=150)
-    print(f"\\nSaved performance chart to: {metrics_path}")
+    plt.savefig(out_path, dpi=150)
     plt.close()
-    
-    # Error Graph (FPR / FNR)
-    err_metrics = ["False Positive Rate\\n(Noise classified as Bird)", "False Negative Rate\\n(Bird Missed)"]
-    base_errs = [base_fpr, base_fnr]
-    
-    # Estimate Pipeline FNR
-    pipe_fnr = 1.0 - pipe_rec
-    pipe_errs = [0.20, pipe_fnr] # For pipeline FPR, roughly 20%
-    
-    fig2, ax2 = plt.subplots(figsize=(8, 6))
-    x2 = np.arange(len(err_metrics))
-    
-    bars1 = ax2.bar(x2 - width/2, base_errs, width, label='Baseline', color='#C44E52')
-    bars2 = ax2.bar(x2 + width/2, pipe_errs, width, label='Pipeline', color='#8172B3')
-    
-    ax2.set_ylabel('Rate', fontsize=12)
-    ax2.set_title('Error Rate Reduction Comparison', fontsize=14, pad=15)
-    ax2.set_xticks(x2)
-    ax2.set_xticklabels(err_metrics, fontsize=11)
-    ax2.legend()
-    
-    for bars in [bars1, bars2]:
+    print(f"  Saved → {out_path}")
+
+
+def plot_error_comparison(baseline: dict, pipeline: dict, out_path: str):
+    labels = ["False Positive Rate\n(Noise → Bird)", "False Negative Rate\n(Bird Missed)"]
+    b_vals = [baseline.get("fpr", 0), baseline.get("fnr", 0)]
+    p_vals = [pipeline.get("fpr", 0), pipeline.get("fnr", 0)]
+
+    x = np.arange(len(labels))
+    w = 0.35
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+    bars_b = ax.bar(x - w / 2, b_vals, w, label="Baseline (BirdNET)", color="#C44E52")
+    bars_p = ax.bar(x + w / 2, p_vals, w, label="Noise-Aware Pipeline", color="#8172B3")
+
+    ax.set_ylabel("Rate", fontsize=12)
+    ax.set_title("Error Rate Comparison", fontsize=14, pad=15)
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels, fontsize=11)
+    ax.legend(fontsize=11)
+
+    for bars in (bars_b, bars_p):
         for bar in bars:
-            height = bar.get_height()
-            ax2.annotate(f'{height:.3f}',
-                        xy=(bar.get_x() + bar.get_width() / 2, height),
-                        xytext=(0, 3),  
-                        textcoords="offset points",
-                        ha='center', va='bottom', fontsize=10)
-                        
-    fig2.tight_layout()
-    errors_path = "results/comparison_graphs/error_comparison.png"
-    plt.savefig(errors_path, dpi=150)
-    print(f"Saved error chart to: {errors_path}")
+            h = bar.get_height()
+            ax.annotate(f"{h:.3f}", xy=(bar.get_x() + bar.get_width() / 2, h),
+                        xytext=(0, 3), textcoords="offset points",
+                        ha="center", va="bottom", fontsize=10)
+
+    fig.tight_layout()
+    plt.savefig(out_path, dpi=150)
     plt.close()
+    print(f"  Saved → {out_path}")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="BirdNET baseline vs Pipeline comparison")
+    parser.add_argument("--manifest", default="data/embeddings/manifest.csv")
+    parser.add_argument("--baseline", default="comparison/baseline_normalized.jsonl")
+    parser.add_argument("--threshold", type=float, default=0.5,
+                        help="Confidence threshold for baseline BirdNET (default: 0.5)")
+    args = parser.parse_args()
+
+    print("=" * 60)
+    print("  BASELINE vs PIPELINE COMPARISON")
+    print("=" * 60)
+
+    # ── 1. Load & validate data ──────────────────────────────────
+    gt = load_ground_truth(args.manifest)
+    bl = load_baseline_predictions(args.baseline)
+
+    gt_labels = Counter(gt.values())
+    print(f"\n--- Step 1: Validate Data ---")
+    print(f"  Total samples:         {len(gt)}")
+    print(f"  Bird  (y_true == 1):   {gt_labels[1]}")
+    print(f"  Noise (y_true == 0):   {gt_labels[0]}")
+    if gt_labels[0] == 0:
+        print("  STOP: FPR cannot be computed — zero noise samples")
+        return
+
+    # ── 2. Alignment ─────────────────────────────────────────────
+    gt_keys = set(gt.keys())
+    bl_keys = set(bl.keys())
+    matched = gt_keys & bl_keys
+    noise_matched = sum(1 for k in matched if gt[k] == 0)
+    noise_unmatched = gt_labels[0] - noise_matched
+
+    print(f"\n--- Step 2: Alignment ---")
+    print(f"  GT ∩ Baseline:         {len(matched)}")
+    print(f"  GT-only (no detect):   {len(gt_keys - bl_keys)}")
+    print(f"  Baseline-only:         {len(bl_keys - gt_keys)}")
+    print(f"  Noise segs matched:    {noise_matched}/{gt_labels[0]}")
+    print(f"  Noise segs unmatched:  {noise_unmatched} (default conf=0 → pred=0)")
+
+    # ── 3. Build aligned predictions ─────────────────────────────
+    y_true, y_pred_baseline = [], []
+    for key, label in gt.items():
+        conf = bl.get(key, 0.0)
+        pred = 1 if conf >= args.threshold else 0
+        y_true.append(label)
+        y_pred_baseline.append(pred)
+
+    true_dist = Counter(y_true)
+    pred_dist = Counter(y_pred_baseline)
+
+    print(f"\n--- Step 2b: Validate Predictions ---")
+    print(f"  Unique y_true:         {sorted(set(y_true))}")
+    print(f"  Unique y_pred_base:    {sorted(set(y_pred_baseline))}")
+    print(f"  y_true  distribution:  {{0: {true_dist[0]}, 1: {true_dist[1]}}}")
+    print(f"  y_pred  distribution:  {{0: {pred_dist[0]}, 1: {pred_dist[1]}}}")
+    assert 0 in pred_dist and 1 in pred_dist, "y_pred must contain both 0 and 1"
+
+    # ── 4. Baseline confusion matrix ─────────────────────────────
+    tp, tn, fp, fn = compute_confusion(y_true, y_pred_baseline)
+    base = metrics_from_confusion(tp, tn, fp, fn)
+
+    print(f"\n--- Step 3: Baseline Confusion Matrix ---")
+    print(f"  [[TN={tn}, FP={fp}],")
+    print(f"   [FN={fn}, TP={tp}]]")
+
+    # ── 5. Verify logic ──────────────────────────────────────────
+    print(f"\n--- Step 4: Verify Logic ---")
+    print(f"  FP={fp} (noise predicted as bird): {'> 0 ✓' if fp > 0 else '= 0 ⚠'}")
+
+    # ── 6. Baseline metrics ──────────────────────────────────────
+    print(f"\n--- Step 5: Baseline Error Rates (threshold={args.threshold}) ---")
+    print(f"  Accuracy:  {base['accuracy']:.4f}")
+    print(f"  Precision: {base['precision']:.4f}")
+    print(f"  Recall:    {base['recall']:.4f}")
+    print(f"  F1:        {base['f1']:.4f}")
+    if (fp + tn) == 0:
+        print(f"  FPR:       N/A (no noise samples in denominator)")
+    else:
+        print(f"  FPR:       {base['fpr']:.4f}  = {fp}/({fp}+{tn})")
+    if (fn + tp) == 0:
+        print(f"  FNR:       N/A (no bird samples in denominator)")
+    else:
+        print(f"  FNR:       {base['fnr']:.4f}  = {fn}/({fn}+{tp})")
+
+    # ── 7. Pipeline metrics (recomputed from model) ──────────────
+    print(f"\n--- Step 5b: Pipeline Metrics (recomputed from classifier) ---")
+    pipe, pipe_n_noise, pipe_n_bird = compute_pipeline_metrics()
+    pipe_tp, pipe_tn = pipe["tp"], pipe["tn"]
+    pipe_fp, pipe_fn = pipe["fp"], pipe["fn"]
+
+    print(f"  Test set: {pipe_n_bird} bird + {pipe_n_noise} noise")
+    print(f"  [[TN={pipe_tn}, FP={pipe_fp}],")
+    print(f"   [FN={pipe_fn}, TP={pipe_tp}]]")
+    print(f"  Accuracy:  {pipe['accuracy']:.4f}")
+    print(f"  Precision: {pipe['precision']:.4f}")
+    print(f"  Recall:    {pipe['recall']:.4f}")
+    print(f"  F1:        {pipe['f1']:.4f}")
+    print(f"  FPR:       {pipe['fpr']:.4f}  = {pipe_fp}/({pipe_fp}+{pipe_tn})")
+    print(f"  FNR:       {pipe['fnr']:.4f}  = {pipe_fn}/({pipe_fn}+{pipe_tp})")
+
+    # ── 8. Sanity check ──────────────────────────────────────────
+    print(f"\n--- Step 6: Sanity Check ---")
+    print(f"  Baseline FPR: {base['fpr']:.4f}")
+    print(f"  Pipeline FPR: {pipe['fpr']:.4f}")
+    if base["fpr"] > pipe["fpr"]:
+        print(f"  ✓ Baseline FPR > Pipeline FPR (pipeline rejects noise better)")
+    else:
+        print(f"  ⚠ Baseline FPR ≤ Pipeline FPR (see explanation below)")
+
+    print(f"\n  Baseline FNR: {base['fnr']:.4f}")
+    print(f"  Pipeline FNR: {pipe['fnr']:.4f}")
+    if base["fnr"] > pipe["fnr"]:
+        print(f"  ✓ Baseline FNR > Pipeline FNR (pipeline finds more birds)")
+
+    # ── 9. Save JSON outputs ─────────────────────────────────────
+    Path("comparison").mkdir(exist_ok=True)
+    Path("results/comparison_graphs").mkdir(parents=True, exist_ok=True)
+
+    with open("comparison/baseline_metrics.json", "w") as f:
+        json.dump(base, f, indent=2)
+
+    pipe_out = {k: pipe[k] for k in ("accuracy", "precision", "recall", "f1", "fpr", "fnr",
+                                       "tp", "tn", "fp", "fn")}
+    with open("comparison/pipeline_metrics.json", "w") as f:
+        json.dump(pipe_out, f, indent=2)
+
+    comp = {"Baseline (BirdNET)": base, "Pipeline (Noise-Aware)": pipe_out}
+    with open("comparison/comparison_table.json", "w") as f:
+        json.dump(comp, f, indent=2)
+
+    print(f"\n--- Saved ---")
+    print(f"  comparison/baseline_metrics.json")
+    print(f"  comparison/pipeline_metrics.json")
+    print(f"  comparison/comparison_table.json")
+
+    # ── 10. Plots ─────────────────────────────────────────────────
+    print(f"\n--- Step 7: Plots ---")
+    plot_metrics_comparison(base, pipe_out, "results/comparison_graphs/metrics_comparison.png")
+    plot_error_comparison(base, pipe_out, "results/comparison_graphs/error_comparison.png")
+
+    print(f"\n{'=' * 60}")
+    print("  DONE")
+    print("=" * 60)
+
 
 if __name__ == "__main__":
     main()
