@@ -29,6 +29,12 @@ Thumbs.db
 # ── Jupyter ─────────────────────────────────
 .ipynb_checkpoints/
 
+# ── Streamlit demo temp ─────────────────────
+.streamlit_preprocess_tmp/
+
+# ── Large BirdNET per-file eval dump ────────
+results/real_birdnet_eval/real_birdnet_eval.json
+
 # ── Misc ────────────────────────────────────
 *.log
 *.h5

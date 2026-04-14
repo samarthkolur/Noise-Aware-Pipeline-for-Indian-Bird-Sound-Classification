@@ -2,15 +2,21 @@
 """
 evaluate.py — Standalone evaluation of the trained classifier.
 
-Loads the test split from HDF5 embeddings, runs classifier inference,
-and prints detailed metrics including confusion matrix and threshold curve.
+Loads embeddings from manifest.csv, runs classifier inference, and prints
+detailed metrics including confusion matrix and threshold curve.
+
+By default uses the held-out **test** split (same seed as training).
+Use ``--full-dataset`` to evaluate on **every row** in the manifest (matches
+``compute_baseline_metrics.py`` apples-to-apples with BirdNET baseline).
 
 Usage:
     python evaluate.py --config config.yaml
+    python evaluate.py --config config.yaml --full-dataset
 """
 
 import argparse
 import json
+import shutil
 from pathlib import Path
 
 import torch
@@ -24,6 +30,7 @@ from training.metrics import (
     compute_metrics,
     compute_confusion_matrix,
     find_optimal_threshold,
+    metrics_routing_uncertain_as_bird,
 )
 from utils.config import load_config
 from utils.logger import get_logger
@@ -40,8 +47,8 @@ def _json_sanitize(obj: object) -> object:
     return obj
 
 
-def evaluate(cfg: dict) -> None:
-    """Run full evaluation on the held-out test set."""
+def evaluate(cfg: dict, *, full_dataset: bool = False) -> None:
+    """Run evaluation on the test split (default) or the full embedding manifest."""
     device_str = cfg.get("project", {}).get("device", "auto")
     if device_str == "auto":
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -76,8 +83,15 @@ def evaluate(cfg: dict) -> None:
         seed=cfg.get("project", {}).get("seed", 42),
     )
 
-    test_subset = Subset(dataset, splits.test_idx)
-    test_loader = DataLoader(test_subset, batch_size=64, shuffle=False)
+    if full_dataset:
+        eval_loader = DataLoader(dataset, batch_size=64, shuffle=False)
+        eval_label = "full manifest"
+        n_eval = len(dataset)
+    else:
+        test_subset = Subset(dataset, splits.test_idx)
+        eval_loader = DataLoader(test_subset, batch_size=64, shuffle=False)
+        eval_label = "test split"
+        n_eval = len(splits.test_idx)
 
     # 2. Load model
     chkpt_dir = Path(cfg["training"]["checkpoint_dir"])
@@ -97,11 +111,11 @@ def evaluate(cfg: dict) -> None:
     model.load_state_dict(chkpt["model_state_dict"])
     model.eval()
 
-    # 3. Run inference on test set
+    # 3. Run inference on evaluation subset
     all_logits, all_labels = [], []
 
     with torch.no_grad():
-        for embs, labels in test_loader:
+        for embs, labels in eval_loader:
             embs = embs.to(device, non_blocking=True)
             logits = model(embs)
             if binary and logits.ndim > 1:
@@ -112,20 +126,24 @@ def evaluate(cfg: dict) -> None:
     cat_logits = torch.cat(all_logits)
     cat_labels = torch.cat(all_labels)
 
-    n_noise_test = int((cat_labels == 0).sum()) if binary else 0
-    n_bird_test = int((cat_labels == 1).sum()) if binary else 0
+    n_noise_eval = int((cat_labels == 0).sum()) if binary else 0
+    n_bird_eval = int((cat_labels == 1).sum()) if binary else 0
     binary_eval_valid = True
-    if binary and (n_noise_test == 0 or n_bird_test == 0):
+    if binary and (n_noise_eval == 0 or n_bird_eval == 0):
         binary_eval_valid = False
         logger.error(
-            f"Binary test split has only one class (noise={n_noise_test}, bird={n_bird_test}) — "
+            f"Binary {eval_label} has only one class (noise={n_noise_eval}, bird={n_bird_eval}) — "
             "confusion matrix, F1, and FPR on noise are not valid. "
-            "Increase data or adjust val/test splits."
+            + (
+                "Increase data or adjust val/test splits."
+                if not full_dataset
+                else "Increase data or check manifest labels."
+            )
         )
 
     # 4. Metrics at default threshold (0.5)
     print("\n" + "=" * 60)
-    print("  EVALUATION REPORT")
+    print(f"  EVALUATION REPORT  ({eval_label}, n={n_eval})")
     print("=" * 60)
 
     metrics_05 = compute_metrics(cat_logits, cat_labels, binary=binary, threshold=0.5)
@@ -136,15 +154,21 @@ def evaluate(cfg: dict) -> None:
     cm_05 = compute_confusion_matrix(cat_logits, cat_labels, binary=binary, threshold=0.5)
     print(f"\n{cm_05}")
 
-    metrics_payload: dict = {"threshold_0.5": metrics_05}
+    metrics_payload: dict = {
+        "threshold_0.5": metrics_05,
+        "eval_split": "full" if full_dataset else "test",
+    }
     if binary:
         metrics_payload.update(
             {
                 "binary_eval_valid": binary_eval_valid,
                 "dataset_noise_count": n_noise_all,
                 "dataset_bird_count": n_bird_all,
-                "test_noise_count": n_noise_test,
-                "test_bird_count": n_bird_test,
+                "eval_noise_count": n_noise_eval,
+                "eval_bird_count": n_bird_eval,
+                # Legacy keys: same counts as eval_* (historically test-split only)
+                "test_noise_count": n_noise_eval,
+                "test_bird_count": n_bird_eval,
             }
         )
 
@@ -157,6 +181,24 @@ def evaluate(cfg: dict) -> None:
             else:
                 print(f"  {k:>12s}: {v:.4f}")
         metrics_payload["per_class_0.5"] = {k: (None if (isinstance(v, float) and v != v) else v) for k, v in pc05.items()}
+
+        # Routing eval: uncertain → bird (binary pred=1 iff prob > low_threshold)
+        inf_cfg = cfg.get("inference", {})
+        low_t = float(inf_cfg.get("low_threshold", 0.2))
+        high_t = float(inf_cfg.get("high_threshold", 0.6))
+        rout = metrics_routing_uncertain_as_bird(cat_logits, cat_labels, low_threshold=low_t)
+        print(f"\n--- Routing eval: uncertain → bird (pred bird if prob > low_threshold={low_t}) ---")
+        print(f"  (high_threshold={high_t} sets inference folders; eval binary uses low_t only)")
+        for k in ("acc", "prec", "rec", "f1"):
+            print(f"  {k:>10s}: {rout[k]:.4f}")
+        print(f"  TN={rout['tn']} FP={rout['fp']} FN={rout['fn']} TP={rout['tp']}")
+        print(f"  FPR (noise→bird): {rout['fpr']:.4f}  FNR (bird missed): {rout['fnr']:.4f}")
+        metrics_payload["routing_uncertain_as_bird"] = {
+            "low_threshold": low_t,
+            "high_threshold": high_t,
+            "description": "pred_bird = 1 iff sigmoid(logit) > low_threshold",
+            **{k: rout[k] for k in ("acc", "prec", "rec", "f1", "tn", "fp", "fn", "tp", "fpr", "fnr")},
+        }
 
     if binary:
         # 5. Optimal threshold search
@@ -247,7 +289,7 @@ def evaluate(cfg: dict) -> None:
 
             bird_errors, noise_errors = [], []
             with torch.no_grad():
-                for embs_batch, labels_batch in test_loader:
+                for embs_batch, labels_batch in eval_loader:
                     embs_batch = embs_batch.to(device, non_blocking=True)
                     recon, _ = ae_model(embs_batch)
                     errors = EmbeddingAutoencoder.compute_reconstruction_error(
@@ -293,9 +335,33 @@ def evaluate(cfg: dict) -> None:
     results_dir = Path(cfg.get("evaluation", {}).get("results_dir", "results"))
     results_dir.mkdir(parents=True, exist_ok=True)
     metrics_path = results_dir / "metrics.json"
+    prev_path = results_dir / "metrics_previous_run.json"
+    if metrics_path.exists():
+        try:
+            shutil.copy2(metrics_path, prev_path)
+            logger.info(f"Backed up previous metrics to {prev_path}")
+        except OSError as e:
+            logger.warning(f"Could not backup previous metrics: {e}")
+
     with open(metrics_path, "w", encoding="utf-8") as f:
         json.dump(_json_sanitize(metrics_payload), f, indent=2)
     logger.info(f"Wrote metrics to {metrics_path}")
+
+    if prev_path.exists() and metrics_payload.get("routing_uncertain_as_bird"):
+        try:
+            with open(prev_path, "r", encoding="utf-8") as f:
+                prev_data = json.load(f)
+            prev_r = prev_data.get("routing_uncertain_as_bird") or {}
+            cur_r = metrics_payload.get("routing_uncertain_as_bird") or {}
+            if prev_r.get("fnr") is not None and cur_r.get("fnr") is not None:
+                d_fnr = float(prev_r["fnr"]) - float(cur_r["fnr"])
+                print("\n--- vs previous run (metrics_previous_run.json) ---")
+                print(f"  ΔFNR (routing eval): {d_fnr:+.4f}  (positive = fewer missed birds)")
+                print(f"  prev FNR: {prev_r['fnr']:.4f}  →  now FNR: {cur_r['fnr']:.4f}")
+                if prev_r.get("fpr") is not None and cur_r.get("fpr") is not None:
+                    print(f"  prev FPR: {prev_r['fpr']:.4f}  →  now FPR: {cur_r['fpr']:.4f}")
+        except (json.JSONDecodeError, OSError, KeyError) as e:
+            logger.debug("Could not compare to previous metrics: %s", e)
 
     print("\n" + "=" * 60)
     print("  EVALUATION COMPLETE")
@@ -305,7 +371,12 @@ def evaluate(cfg: dict) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Evaluate the trained classifier")
     parser.add_argument("--config", type=str, default="config.yaml")
+    parser.add_argument(
+        "--full-dataset",
+        action="store_true",
+        help="Evaluate on all manifest rows (not only the held-out test split).",
+    )
     args = parser.parse_args()
 
     cfg = load_config(args.config)
-    evaluate(cfg)
+    evaluate(cfg, full_dataset=args.full_dataset)

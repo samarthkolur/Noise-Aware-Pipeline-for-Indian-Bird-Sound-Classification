@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
 compute_baseline_metrics.py
-Compare BirdNET baseline vs Noise-Aware Pipeline.
+Compare BirdNET baseline vs Noise-Aware Pipeline (strict full-manifest comparison).
 
 Baseline predictions: comparison/baseline_normalized.jsonl (confidence thresholded)
-Pipeline metrics:     recomputed from trained classifier on test split
+Pipeline metrics:     recomputed from trained classifier on FULL manifest.csv
 Ground truth:         data/embeddings/manifest.csv (noise/ → 0, species → 1)
 
 Key mapping fix: noise segments in the manifest are filed under
@@ -17,11 +17,16 @@ The loader recovers the original (species, filenum, seg_idx) key for noise entri
 import json
 import argparse
 from pathlib import Path
+from typing import Tuple
 from collections import Counter
 
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
+try:
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+except ModuleNotFoundError:
+    matplotlib = None
+    plt = None
 import numpy as np
 
 
@@ -108,12 +113,16 @@ def metrics_from_confusion(tp, tn, fp, fn):
                 tp=tp, tn=tn, fp=fp, fn=fn)
 
 
-def compute_pipeline_metrics(config_path: str = "config.yaml") -> dict:
-    """Recompute pipeline metrics from the trained classifier on the test split."""
+def compute_pipeline_metrics(config_path: str = "config.yaml") -> Tuple[dict, int, int, int]:
+    """Recompute pipeline metrics from the trained classifier on the FULL manifest.
+
+    This is required for a strict apples-to-apples comparison, because the BirdNET
+    baseline metrics are computed over every key in manifest.csv.
+    """
     import torch
-    from dataset.dataset import EmbeddingDataset, create_splits
+    from dataset.dataset import EmbeddingDataset
     from models.classifier import EmbeddingClassifier
-    from torch.utils.data import DataLoader, Subset
+    from torch.utils.data import DataLoader
     from sklearn.metrics import confusion_matrix as sklearn_cm
 
     cfg_mod = __import__("utils.config", fromlist=["load_config"])
@@ -122,9 +131,7 @@ def compute_pipeline_metrics(config_path: str = "config.yaml") -> dict:
 
     ds = EmbeddingDataset.from_manifest(
         Path(cfg["data"]["embeddings_dir"]) / "manifest.csv", binary=True)
-    splits = create_splits(ds, val_frac=0.15, test_frac=0.10, stratify=True, seed=42)
-    test_sub = Subset(ds, splits.test_idx)
-    loader = DataLoader(test_sub, batch_size=64, shuffle=False)
+    loader = DataLoader(ds, batch_size=64, shuffle=False)
 
     model = EmbeddingClassifier(
         input_dim=cfg["embedding"]["embedding_dim"],
@@ -148,17 +155,22 @@ def compute_pipeline_metrics(config_path: str = "config.yaml") -> dict:
     labels_t = torch.cat(all_labels)
     probs = torch.sigmoid(logits_t).numpy()
     y = labels_t.numpy()
-    preds = (probs > 0.5).astype(int)
+    # Match inference + evaluate.py: uncertain → bird (pred bird iff prob > low_threshold)
+    low_thr = float(cfg.get("inference", {}).get("low_threshold", 0.2))
+    preds = (probs > low_thr).astype(int)
 
     tn, fp, fn, tp = sklearn_cm(y, preds).ravel()
-    total = int(tn + fp + fn + tp)
     result = metrics_from_confusion(int(tp), int(tn), int(fp), int(fn))
     n_noise = int((y == 0).sum())
     n_bird = int((y == 1).sum())
-    return result, n_noise, n_bird
+    n_total = int(len(y))
+    return result, n_noise, n_bird, n_total
 
 
 def plot_metrics_comparison(baseline: dict, pipeline: dict, out_path: str):
+    if plt is None:
+        print("  [skip plots] matplotlib not installed")
+        return
     labels = ["Accuracy", "Precision", "Recall", "F1 Score"]
     b_vals = [baseline[k] for k in ("accuracy", "precision", "recall", "f1")]
     p_vals = [pipeline[k] for k in ("accuracy", "precision", "recall", "f1")]
@@ -191,6 +203,9 @@ def plot_metrics_comparison(baseline: dict, pipeline: dict, out_path: str):
 
 
 def plot_error_comparison(baseline: dict, pipeline: dict, out_path: str):
+    if plt is None:
+        print("  [skip plots] matplotlib not installed")
+        return
     labels = ["False Positive Rate\n(Noise → Bird)", "False Negative Rate\n(Bird Missed)"]
     b_vals = [baseline.get("fpr", 0), baseline.get("fnr", 0)]
     p_vals = [pipeline.get("fpr", 0), pipeline.get("fnr", 0)]
@@ -227,6 +242,8 @@ def main():
     parser.add_argument("--baseline", default="comparison/baseline_normalized.jsonl")
     parser.add_argument("--threshold", type=float, default=0.5,
                         help="Confidence threshold for baseline BirdNET (default: 0.5)")
+    parser.add_argument("--config", type=str, default="config.yaml",
+                        help="Pipeline config (for pipeline-side low_threshold)")
     args = parser.parse_args()
 
     print("=" * 60)
@@ -306,12 +323,18 @@ def main():
         print(f"  FNR:       {base['fnr']:.4f}  = {fn}/({fn}+{tp})")
 
     # ── 7. Pipeline metrics (recomputed from model) ──────────────
-    print(f"\n--- Step 5b: Pipeline Metrics (recomputed from classifier) ---")
-    pipe, pipe_n_noise, pipe_n_bird = compute_pipeline_metrics()
+    from utils.config import load_config as _lc
+
+    _cfg = _lc(args.config)
+    low_thr = float(_cfg.get("inference", {}).get("low_threshold", 0.2))
+    print(
+        f"\n--- Step 5b: Pipeline Metrics (recomputed from classifier, pred bird if prob > {low_thr}) ---"
+    )
+    pipe, pipe_n_noise, pipe_n_bird, pipe_n_total = compute_pipeline_metrics(args.config)
     pipe_tp, pipe_tn = pipe["tp"], pipe["tn"]
     pipe_fp, pipe_fn = pipe["fp"], pipe["fn"]
 
-    print(f"  Test set: {pipe_n_bird} bird + {pipe_n_noise} noise")
+    print(f"  Full set: {pipe_n_bird} bird + {pipe_n_noise} noise (total={pipe_n_total})")
     print(f"  [[TN={pipe_tn}, FP={pipe_fp}],")
     print(f"   [FN={pipe_fn}, TP={pipe_tp}]]")
     print(f"  Accuracy:  {pipe['accuracy']:.4f}")

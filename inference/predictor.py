@@ -49,8 +49,8 @@ class Predictor:
 
         # Thresholds
         inf_cfg = cfg.get("inference", {})
-        self.high_threshold = inf_cfg.get("high_threshold", 0.7)
-        self.low_threshold = inf_cfg.get("low_threshold", 0.3)
+        self.high_threshold = inf_cfg.get("high_threshold", 0.6)
+        self.low_threshold = inf_cfg.get("low_threshold", 0.2)
 
         # Load optimal threshold from training (if available)
         conf_thresh_raw = inf_cfg.get("confidence_threshold", "auto")

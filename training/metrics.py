@@ -158,3 +158,57 @@ def find_optimal_threshold(
         "best_value": float(best_val),
         "curve": curve,
     }
+
+
+def binary_preds_uncertain_as_bird(probs: np.ndarray, low_threshold: float) -> np.ndarray:
+    """Match inference routing: noise only if prob <= low; uncertain and clean_bird count as bird.
+
+    This reduces false negatives vs a single mid-threshold at the cost of some FPR on borderline noise.
+    """
+    return (probs > low_threshold).astype(np.int64)
+
+
+def compute_metrics_from_preds(labels_np: np.ndarray, preds_np: np.ndarray) -> dict:
+    """Accuracy, precision, recall, F1 for binary 0/1 arrays."""
+    acc = accuracy_score(labels_np, preds_np)
+    prec = precision_score(labels_np, preds_np, average="binary", zero_division=0)
+    rec = recall_score(labels_np, preds_np, average="binary", zero_division=0)
+    f1 = f1_score(labels_np, preds_np, average="binary", zero_division=0)
+    return {
+        "acc": float(acc),
+        "prec": float(prec),
+        "rec": float(rec),
+        "f1": float(f1),
+    }
+
+
+def confusion_rates_binary(labels_np: np.ndarray, preds_np: np.ndarray) -> dict:
+    """TN, FP, FN, TP, FPR, FNR for binary classification."""
+    cm = confusion_matrix(labels_np, preds_np, labels=[0, 1])
+    tn, fp, fn, tp = (int(x) for x in cm.ravel())
+    fpr = fp / (fp + tn) if (fp + tn) else 0.0
+    fnr = fn / (fn + tp) if (fn + tp) else 0.0
+    return {
+        "tn": tn,
+        "fp": fp,
+        "fn": fn,
+        "tp": tp,
+        "fpr": float(fpr),
+        "fnr": float(fnr),
+    }
+
+
+def metrics_routing_uncertain_as_bird(
+    logits: torch.Tensor,
+    labels: torch.Tensor,
+    low_threshold: float,
+) -> dict:
+    """Evaluate with pred_bird = (sigmoid(logits) > low_threshold)."""
+    if logits.ndim > 1:
+        logits = logits.squeeze(-1)
+    probs = torch.sigmoid(logits).cpu().numpy()
+    labels_np = labels.cpu().numpy()
+    preds_np = binary_preds_uncertain_as_bird(probs, low_threshold)
+    m = compute_metrics_from_preds(labels_np, preds_np)
+    cr = confusion_rates_binary(labels_np, preds_np)
+    return {**m, **cr, "low_threshold": float(low_threshold)}
