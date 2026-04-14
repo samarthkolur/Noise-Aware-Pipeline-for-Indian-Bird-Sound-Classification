@@ -1,23 +1,25 @@
 #!/usr/bin/env python3
 """
 compute_baseline_metrics.py
-Compare BirdNET baseline vs Noise-Aware Pipeline (strict full-manifest comparison).
+Compare BirdNET baseline vs Noise-Aware Pipeline — FAIR comparison on
+the same held-out TEST SPLIT (seed=42, test_frac=0.10, stratified).
 
-Baseline predictions: comparison/baseline_normalized.jsonl (confidence thresholded)
-Pipeline metrics:     recomputed from trained classifier on FULL manifest.csv
-Ground truth:         data/embeddings/manifest.csv (noise/ → 0, species → 1)
+Baseline predictions:  comparison/baseline_normalized.jsonl (confidence @0.5)
+Pipeline metrics:      recomputed from trained classifier on TEST SPLIT ONLY
+                       at threshold=0.5 (same as baseline)
+Ground truth:          data/embeddings/manifest.csv (noise/ → 0, species → 1)
 
-Key mapping fix: noise segments in the manifest are filed under
-  data/processed/noise/{OrigSpecies}__{OrigFileNum}_segXXXX.wav
-but BirdNET JSONL keys use the original path structure:
-  iBC53/{OrigSpecies}/{OrigFileNum}.wav
-The loader recovers the original (species, filenum, seg_idx) key for noise entries.
+IMPORTANT: Both systems are evaluated on the SAME ~10% held-out test split
+that was never used for MLP training (create_splits seed=42 matches trainer).
+Using the full manifest for either side would inflate pipeline numbers
+(model has seen 75% of the data) and create different sample counts.
 """
 
+import csv
 import json
 import argparse
 from pathlib import Path
-from typing import Tuple
+from typing import Dict, List, Optional, Tuple
 from collections import Counter
 
 try:
@@ -30,49 +32,113 @@ except ModuleNotFoundError:
 import numpy as np
 
 
-def load_ground_truth(manifest_path: str) -> dict:
-    """Load binary labels keyed to match BirdNET JSONL structure.
+# ── Key building helpers (must match load_ground_truth logic) ──────────────
 
-    Bird segments:  key = (species_folder, file_stem, seg_idx)
-    Noise segments: filename encodes original source as SpeciesName__FileNum;
-                    key = (OrigSpecies, OrigFileNum, seg_idx) to align with JSONL.
+def _build_key_from_manifest_row(row: dict) -> Tuple:
+    """Build a (folder, stem, seg_idx) key from a manifest CSV row.
+
+    Noise segments have filenames like:
+        data/processed/noise/OrigSpecies__FileNum_segNNNN.wav
+    and BirdNET JSONL uses the original iBC53 path:
+        iBC53/OrigSpecies/FileNum.wav
+    so we decode the '__' encoding back to (OrigSpecies, FileNum, seg_idx).
     """
-    ground_truth = {}
-    parse_warnings = 0
+    species = row["species"]
+    src_file = row["source_file"]
+    seg_idx = int(row["segment_index"])
+    label = 0 if species.lower() == "noise" else 1
+
+    p = Path(src_file)
+    folder = p.parent.name
+    file_stem = p.name.split("_seg")[0]
+
+    if label == 0 and "__" in file_stem:
+        orig_species, orig_filenum = file_stem.rsplit("__", 1)
+        return (orig_species, orig_filenum, seg_idx)
+    return (folder, file_stem, seg_idx)
+
+
+def _get_ordered_manifest_rows(manifest_path: str) -> List[dict]:
+    """Return manifest rows in the SAME order as EmbeddingDataset.from_manifest().
+
+    EmbeddingDataset groups rows by hdf5_path (sorted alphabetically), then
+    iterates each group in manifest-insertion order.  Replicating this mapping
+    lets us go from dataset index i → manifest row without touching PyTorch.
+    """
     with open(manifest_path, "r", encoding="utf-8") as f:
-        f.readline()
-        for line in f:
-            parts = line.strip().split(",")
-            if len(parts) < 3:
-                continue
-            species = parts[0]
-            src_file = parts[1]
-            seg_idx = int(parts[2])
+        rows = list(csv.DictReader(f))
 
-            label = 0 if species.lower() == "noise" else 1
+    # Group by hdf5_path, preserving insertion order within each group
+    h5_groups: Dict[str, List[dict]] = {}
+    for row in rows:
+        h5_groups.setdefault(row["hdf5_path"], []).append(row)
 
-            p = Path(src_file)
-            folder = p.parent.name
-            file_stem = p.name.split("_seg")[0]
+    ordered: List[dict] = []
+    for h5_path in sorted(h5_groups.keys()):
+        ordered.extend(h5_groups[h5_path])
 
-            if label == 0 and "__" in file_stem:
-                orig_species, orig_filenum = file_stem.rsplit("__", 1)
-                key = (orig_species, orig_filenum, seg_idx)
-            else:
-                key = (folder, file_stem, seg_idx)
+    assert len(ordered) == len(rows), "Row count mismatch after grouping"
+    return ordered
 
-            if key in ground_truth and ground_truth[key] != label:
-                parse_warnings += 1
-            ground_truth[key] = label
 
-    if parse_warnings:
-        print(f"  ⚠ {parse_warnings} key collisions between bird/noise segments")
-    return ground_truth
+# ── Ground truth loaders ───────────────────────────────────────────────────
 
+def load_ground_truth(manifest_path: str) -> dict:
+    """Load ALL binary labels from manifest (used to verify counts only)."""
+    gt = {}
+    with open(manifest_path, "r", encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    for row in rows:
+        key = _build_key_from_manifest_row(row)
+        label = 0 if row["species"].lower() == "noise" else 1
+        gt[key] = label
+    return gt
+
+
+def build_test_split_ground_truth(manifest_path: str, cfg: dict) -> Tuple[dict, List]:
+    """Return (gt_dict, test_manifest_rows) for the test split only.
+
+    Uses the same create_splits(seed, val_frac, test_frac, stratify) call as
+    trainer.py and evaluate.py so the split is identical.
+    """
+    from dataset.dataset import EmbeddingDataset, create_splits
+
+    manifest_path = Path(manifest_path)
+    dataset = EmbeddingDataset.from_manifest(manifest_path, binary=True)
+
+    ds_cfg = cfg.get("dataset", {})
+    splits = create_splits(
+        dataset,
+        val_frac=ds_cfg.get("val_split", 0.15),
+        test_frac=ds_cfg.get("test_split", 0.10),
+        stratify=ds_cfg.get("stratify", True),
+        seed=cfg.get("project", {}).get("seed", 42),
+    )
+
+    ordered_rows = _get_ordered_manifest_rows(str(manifest_path))
+    assert len(ordered_rows) == len(dataset), (
+        f"Manifest rows ({len(ordered_rows)}) != dataset length ({len(dataset)}). "
+        "Run embedding extraction again to regenerate manifest."
+    )
+
+    test_gt: dict = {}
+    test_rows: List[dict] = []
+    for i in splits.test_idx:
+        row = ordered_rows[i]
+        key = _build_key_from_manifest_row(row)
+        label = 0 if row["species"].lower() == "noise" else 1
+        test_gt[key] = label
+        test_rows.append(row)
+
+    return test_gt, test_rows
+
+
+# ── Baseline predictions loader ────────────────────────────────────────────
 
 def load_baseline_predictions(jsonl_path: str) -> dict:
     """Load BirdNET detections, keyed by (folder, file_stem, seg_idx).
-    Multiple detections per segment → keep max confidence."""
+    Multiple detections per segment → keep max confidence.
+    """
     predictions = {}
     with open(jsonl_path, "r", encoding="utf-8") as f:
         for line in f:
@@ -87,11 +153,12 @@ def load_baseline_predictions(jsonl_path: str) -> dict:
             file_stem = parts[-1].split(".")[0]
             seg_idx = int(float(d["start_sec"]) // 3)
             conf = float(d["confidence"])
-
             key = (folder, file_stem, seg_idx)
             predictions[key] = max(predictions.get(key, 0.0), conf)
     return predictions
 
+
+# ── Confusion matrix / metrics ─────────────────────────────────────────────
 
 def compute_confusion(y_true, y_pred):
     tp = sum(1 for t, p in zip(y_true, y_pred) if t == 1 and p == 1)
@@ -103,35 +170,52 @@ def compute_confusion(y_true, y_pred):
 
 def metrics_from_confusion(tp, tn, fp, fn):
     total = tp + tn + fp + fn
-    acc = (tp + tn) / total if total else 0
+    acc  = (tp + tn) / total if total else 0
     prec = tp / (tp + fp) if (tp + fp) else 0
-    rec = tp / (tp + fn) if (tp + fn) else 0
-    f1 = 2 * prec * rec / (prec + rec) if (prec + rec) else 0
-    fpr = fp / (fp + tn) if (fp + tn) else 0
-    fnr = fn / (fn + tp) if (fn + tp) else 0
-    return dict(accuracy=acc, precision=prec, recall=rec, f1=f1, fpr=fpr, fnr=fnr,
-                tp=tp, tn=tn, fp=fp, fn=fn)
+    rec  = tp / (tp + fn) if (tp + fn) else 0
+    f1   = 2 * prec * rec / (prec + rec) if (prec + rec) else 0
+    fpr  = fp / (fp + tn) if (fp + tn) else 0
+    fnr  = fn / (fn + tp) if (fn + tp) else 0
+    return dict(accuracy=acc, precision=prec, recall=rec, f1=f1,
+                fpr=fpr, fnr=fnr, tp=tp, tn=tn, fp=fp, fn=fn)
 
 
-def compute_pipeline_metrics(config_path: str = "config.yaml") -> Tuple[dict, int, int, int]:
-    """Recompute pipeline metrics from the trained classifier on the FULL manifest.
+# ── Pipeline metrics on test split ────────────────────────────────────────
 
-    This is required for a strict apples-to-apples comparison, because the BirdNET
-    baseline metrics are computed over every key in manifest.csv.
+def compute_pipeline_metrics_test_split(
+    config_path: str = "config.yaml",
+    threshold: float = 0.5,
+) -> Tuple[dict, int, int, int]:
+    """Evaluate trained MLP on the TEST SPLIT ONLY at a given threshold.
+
+    This is the correct way to compare with the BirdNET baseline:
+    - Uses ONLY the held-out test indices (same seed=42 split as training)
+    - Uses threshold=0.5 by default to match the baseline's operating point
+    - NEVER touches training or validation data
     """
     import torch
-    from dataset.dataset import EmbeddingDataset
+    from dataset.dataset import EmbeddingDataset, create_splits
     from models.classifier import EmbeddingClassifier
-    from torch.utils.data import DataLoader
-    from sklearn.metrics import confusion_matrix as sklearn_cm
+    from torch.utils.data import DataLoader, Subset
 
     cfg_mod = __import__("utils.config", fromlist=["load_config"])
     cfg = cfg_mod.load_config(config_path)
     device = torch.device("cpu")
 
-    ds = EmbeddingDataset.from_manifest(
-        Path(cfg["data"]["embeddings_dir"]) / "manifest.csv", binary=True)
-    loader = DataLoader(ds, batch_size=64, shuffle=False)
+    manifest = Path(cfg["data"]["embeddings_dir"]) / "manifest.csv"
+    ds = EmbeddingDataset.from_manifest(manifest, binary=True)
+
+    ds_cfg = cfg.get("dataset", {})
+    splits = create_splits(
+        ds,
+        val_frac=ds_cfg.get("val_split", 0.15),
+        test_frac=ds_cfg.get("test_split", 0.10),
+        stratify=ds_cfg.get("stratify", True),
+        seed=cfg.get("project", {}).get("seed", 42),
+    )
+
+    test_subset = Subset(ds, splits.test_idx)
+    loader = DataLoader(test_subset, batch_size=64, shuffle=False)
 
     model = EmbeddingClassifier(
         input_dim=cfg["embedding"]["embedding_dim"],
@@ -155,19 +239,24 @@ def compute_pipeline_metrics(config_path: str = "config.yaml") -> Tuple[dict, in
     labels_t = torch.cat(all_labels)
     probs = torch.sigmoid(logits_t).numpy()
     y = labels_t.numpy()
-    # Match inference + evaluate.py: uncertain → bird (pred bird iff prob > low_threshold)
-    low_thr = float(cfg.get("inference", {}).get("low_threshold", 0.2))
-    preds = (probs > low_thr).astype(int)
 
-    tn, fp, fn, tp = sklearn_cm(y, preds).ravel()
-    result = metrics_from_confusion(int(tp), int(tn), int(fp), int(fn))
+    preds = (probs >= threshold).astype(int)
+    tp = int(((preds == 1) & (y == 1)).sum())
+    tn = int(((preds == 0) & (y == 0)).sum())
+    fp = int(((preds == 1) & (y == 0)).sum())
+    fn = int(((preds == 0) & (y == 1)).sum())
+
+    result = metrics_from_confusion(tp, tn, fp, fn)
     n_noise = int((y == 0).sum())
-    n_bird = int((y == 1).sum())
+    n_bird  = int((y == 1).sum())
     n_total = int(len(y))
     return result, n_noise, n_bird, n_total
 
 
-def plot_metrics_comparison(baseline: dict, pipeline: dict, out_path: str):
+# ── Plots ─────────────────────────────────────────────────────────────────
+
+def plot_metrics_comparison(baseline: dict, pipeline: dict, out_path: str,
+                            n_test: int = 0):
     if plt is None:
         print("  [skip plots] matplotlib not installed")
         return
@@ -179,11 +268,14 @@ def plot_metrics_comparison(baseline: dict, pipeline: dict, out_path: str):
     w = 0.35
 
     fig, ax = plt.subplots(figsize=(10, 6))
-    bars_b = ax.bar(x - w / 2, b_vals, w, label="Baseline (Raw BirdNET)", color="#4C72B0")
-    bars_p = ax.bar(x + w / 2, p_vals, w, label="Noise-Aware Pipeline", color="#55A868")
+    bars_b = ax.bar(x - w / 2, b_vals, w, label="Baseline (Raw BirdNET @0.5)", color="#4C72B0")
+    bars_p = ax.bar(x + w / 2, p_vals, w, label="Noise-Aware Pipeline @0.5",   color="#55A868")
 
     ax.set_ylabel("Score", fontsize=12)
-    ax.set_title("Performance: Raw BirdNET vs Noise-Aware Pipeline", fontsize=14, pad=15)
+    title = "Performance: Raw BirdNET vs Noise-Aware Pipeline"
+    if n_test:
+        title += f"\n(Same test split, N={n_test})"
+    ax.set_title(title, fontsize=13, pad=15)
     ax.set_xticks(x)
     ax.set_xticklabels(labels, fontsize=12)
     ax.legend(fontsize=11)
@@ -202,7 +294,8 @@ def plot_metrics_comparison(baseline: dict, pipeline: dict, out_path: str):
     print(f"  Saved → {out_path}")
 
 
-def plot_error_comparison(baseline: dict, pipeline: dict, out_path: str):
+def plot_error_comparison(baseline: dict, pipeline: dict, out_path: str,
+                          n_test: int = 0):
     if plt is None:
         print("  [skip plots] matplotlib not installed")
         return
@@ -218,10 +311,14 @@ def plot_error_comparison(baseline: dict, pipeline: dict, out_path: str):
     bars_p = ax.bar(x + w / 2, p_vals, w, label="Noise-Aware Pipeline", color="#8172B3")
 
     ax.set_ylabel("Rate", fontsize=12)
-    ax.set_title("Error Rate Comparison", fontsize=14, pad=15)
+    title = "Error Rate Comparison"
+    if n_test:
+        title += f" (N={n_test})"
+    ax.set_title(title, fontsize=14, pad=15)
     ax.set_xticks(x)
     ax.set_xticklabels(labels, fontsize=11)
     ax.legend(fontsize=11)
+    ax.set_ylim(0, max(max(b_vals), max(p_vals)) * 1.25 + 0.05)
 
     for bars in (bars_b, bars_p):
         for bar in bars:
@@ -236,107 +333,99 @@ def plot_error_comparison(baseline: dict, pipeline: dict, out_path: str):
     print(f"  Saved → {out_path}")
 
 
+# ── Main ──────────────────────────────────────────────────────────────────
+
 def main():
-    parser = argparse.ArgumentParser(description="BirdNET baseline vs Pipeline comparison")
-    parser.add_argument("--manifest", default="data/embeddings/manifest.csv")
-    parser.add_argument("--baseline", default="comparison/baseline_normalized.jsonl")
-    parser.add_argument("--threshold", type=float, default=0.5,
-                        help="Confidence threshold for baseline BirdNET (default: 0.5)")
-    parser.add_argument("--config", type=str, default="config.yaml",
-                        help="Pipeline config (for pipeline-side low_threshold)")
+    parser = argparse.ArgumentParser(
+        description="BirdNET baseline vs Pipeline — fair test-split comparison"
+    )
+    parser.add_argument("--manifest",   default="data/embeddings/manifest.csv")
+    parser.add_argument("--baseline",   default="comparison/baseline_normalized.jsonl")
+    parser.add_argument("--threshold",  type=float, default=0.5,
+                        help="Confidence threshold for BirdNET AND MLP (default: 0.5)")
+    parser.add_argument("--config",     type=str,   default="config.yaml")
     args = parser.parse_args()
 
-    print("=" * 60)
-    print("  BASELINE vs PIPELINE COMPARISON")
-    print("=" * 60)
+    print("=" * 65)
+    print("  BASELINE vs PIPELINE — FAIR TEST-SPLIT COMPARISON")
+    print("=" * 65)
+    print(f"  Both systems evaluated on the SAME held-out test split")
+    print(f"  (seed=42, test_frac=0.10, stratified — same split as trainer.py)")
+    print(f"  Both thresholded at {args.threshold:.2f}  (apples-to-apples)")
 
-    # ── 1. Load & validate data ──────────────────────────────────
-    gt = load_ground_truth(args.manifest)
-    bl = load_baseline_predictions(args.baseline)
+    # ── 1. Load config ──────────────────────────────────────────────
+    from utils.config import load_config
+    cfg = load_config(args.config)
 
-    gt_labels = Counter(gt.values())
-    print(f"\n--- Step 1: Validate Data ---")
-    print(f"  Total samples:         {len(gt)}")
-    print(f"  Bird  (y_true == 1):   {gt_labels[1]}")
-    print(f"  Noise (y_true == 0):   {gt_labels[0]}")
-    if gt_labels[0] == 0:
-        print("  STOP: FPR cannot be computed — zero noise samples")
+    # ── 2. Build TEST-SPLIT ground truth from manifest ──────────────
+    print(f"\n--- Step 1: Build Test-Split Ground Truth ---")
+    test_gt, test_rows = build_test_split_ground_truth(args.manifest, cfg)
+
+    gt_labels = Counter(test_gt.values())
+    n_bird_test  = gt_labels[1]
+    n_noise_test = gt_labels[0]
+    n_total_test = len(test_gt)
+    print(f"  Test split size:    {n_total_test}")
+    print(f"  Bird  (y==1):       {n_bird_test}")
+    print(f"  Noise (y==0):       {n_noise_test}")
+    if n_noise_test == 0:
+        print("  STOP: No noise samples in test split — FPR cannot be computed.")
         return
 
-    # ── 2. Alignment ─────────────────────────────────────────────
-    gt_keys = set(gt.keys())
-    bl_keys = set(bl.keys())
-    matched = gt_keys & bl_keys
-    noise_matched = sum(1 for k in matched if gt[k] == 0)
-    noise_unmatched = gt_labels[0] - noise_matched
+    # ── 3. Load baseline predictions ─────────────────────────────────
+    print(f"\n--- Step 2: Load Baseline Predictions ---")
+    bl = load_baseline_predictions(args.baseline)
 
-    print(f"\n--- Step 2: Alignment ---")
-    print(f"  GT ∩ Baseline:         {len(matched)}")
-    print(f"  GT-only (no detect):   {len(gt_keys - bl_keys)}")
-    print(f"  Baseline-only:         {len(bl_keys - gt_keys)}")
-    print(f"  Noise segs matched:    {noise_matched}/{gt_labels[0]}")
-    print(f"  Noise segs unmatched:  {noise_unmatched} (default conf=0 → pred=0)")
+    test_keys   = set(test_gt.keys())
+    bl_keys     = set(bl.keys())
+    matched     = test_keys & bl_keys
+    noise_match = sum(1 for k in matched if test_gt[k] == 0)
+    print(f"  Test keys:          {len(test_keys)}")
+    print(f"  Baseline keys:      {len(bl_keys)}")
+    print(f"  Matched:            {len(matched)}")
+    print(f"  GT-only (no detect):{len(test_keys - bl_keys)}  → treated as conf=0 → pred=0")
+    print(f"  Noise segs matched: {noise_match}/{n_noise_test}")
 
-    # ── 3. Build aligned predictions ─────────────────────────────
-    y_true, y_pred_baseline = [], []
-    for key, label in gt.items():
+    # ── 4. Baseline confusion on test split ──────────────────────────
+    y_true, y_pred_base = [], []
+    for key, label in test_gt.items():
         conf = bl.get(key, 0.0)
         pred = 1 if conf >= args.threshold else 0
         y_true.append(label)
-        y_pred_baseline.append(pred)
+        y_pred_base.append(pred)
 
-    true_dist = Counter(y_true)
-    pred_dist = Counter(y_pred_baseline)
+    pred_dist = Counter(y_pred_base)
+    print(f"\n--- Step 3: Baseline Predictions on Test Split ---")
+    print(f"  y_pred distribution: {{0: {pred_dist[0]}, 1: {pred_dist[1]}}}")
+    if 1 not in pred_dist:
+        print("  WARNING: baseline predicts 0 for every test sample — "
+              "check that baseline JSONL keys match manifest structure.")
 
-    print(f"\n--- Step 2b: Validate Predictions ---")
-    print(f"  Unique y_true:         {sorted(set(y_true))}")
-    print(f"  Unique y_pred_base:    {sorted(set(y_pred_baseline))}")
-    print(f"  y_true  distribution:  {{0: {true_dist[0]}, 1: {true_dist[1]}}}")
-    print(f"  y_pred  distribution:  {{0: {pred_dist[0]}, 1: {pred_dist[1]}}}")
-    assert 0 in pred_dist and 1 in pred_dist, "y_pred must contain both 0 and 1"
-
-    # ── 4. Baseline confusion matrix ─────────────────────────────
-    tp, tn, fp, fn = compute_confusion(y_true, y_pred_baseline)
+    tp, tn, fp, fn = compute_confusion(y_true, y_pred_base)
     base = metrics_from_confusion(tp, tn, fp, fn)
 
-    print(f"\n--- Step 3: Baseline Confusion Matrix ---")
-    print(f"  [[TN={tn}, FP={fp}],")
-    print(f"   [FN={fn}, TP={tp}]]")
-
-    # ── 5. Verify logic ──────────────────────────────────────────
-    print(f"\n--- Step 4: Verify Logic ---")
-    print(f"  FP={fp} (noise predicted as bird): {'> 0 ✓' if fp > 0 else '= 0 ⚠'}")
-
-    # ── 6. Baseline metrics ──────────────────────────────────────
-    print(f"\n--- Step 5: Baseline Error Rates (threshold={args.threshold}) ---")
+    print(f"\n--- Baseline Confusion (threshold={args.threshold}) ---")
+    print(f"  [[TN={tn:4d}, FP={fp:4d}],")
+    print(f"   [FN={fn:4d}, TP={tp:4d}]]   total={tp+tn+fp+fn}")
     print(f"  Accuracy:  {base['accuracy']:.4f}")
     print(f"  Precision: {base['precision']:.4f}")
     print(f"  Recall:    {base['recall']:.4f}")
     print(f"  F1:        {base['f1']:.4f}")
-    if (fp + tn) == 0:
-        print(f"  FPR:       N/A (no noise samples in denominator)")
-    else:
-        print(f"  FPR:       {base['fpr']:.4f}  = {fp}/({fp}+{tn})")
-    if (fn + tp) == 0:
-        print(f"  FNR:       N/A (no bird samples in denominator)")
-    else:
-        print(f"  FNR:       {base['fnr']:.4f}  = {fn}/({fn}+{tp})")
+    print(f"  FPR:       {base['fpr']:.4f}  = {fp}/({fp}+{tn})")
+    print(f"  FNR:       {base['fnr']:.4f}  = {fn}/({fn}+{tp})")
 
-    # ── 7. Pipeline metrics (recomputed from model) ──────────────
-    from utils.config import load_config as _lc
-
-    _cfg = _lc(args.config)
-    low_thr = float(_cfg.get("inference", {}).get("low_threshold", 0.2))
-    print(
-        f"\n--- Step 5b: Pipeline Metrics (recomputed from classifier, pred bird if prob > {low_thr}) ---"
+    # ── 5. Pipeline on test split ─────────────────────────────────────
+    print(f"\n--- Step 4: Pipeline Metrics on Test Split (threshold={args.threshold}) ---")
+    pipe, pipe_n_noise, pipe_n_bird, pipe_n_total = compute_pipeline_metrics_test_split(
+        config_path=args.config,
+        threshold=args.threshold,
     )
-    pipe, pipe_n_noise, pipe_n_bird, pipe_n_total = compute_pipeline_metrics(args.config)
     pipe_tp, pipe_tn = pipe["tp"], pipe["tn"]
     pipe_fp, pipe_fn = pipe["fp"], pipe["fn"]
 
-    print(f"  Full set: {pipe_n_bird} bird + {pipe_n_noise} noise (total={pipe_n_total})")
-    print(f"  [[TN={pipe_tn}, FP={pipe_fp}],")
-    print(f"   [FN={pipe_fn}, TP={pipe_tp}]]")
+    print(f"  Test set: {pipe_n_bird} bird + {pipe_n_noise} noise (total={pipe_n_total})")
+    print(f"  [[TN={pipe_tn:4d}, FP={pipe_fp:4d}],")
+    print(f"   [FN={pipe_fn:4d}, TP={pipe_tp:4d}]]")
     print(f"  Accuracy:  {pipe['accuracy']:.4f}")
     print(f"  Precision: {pipe['precision']:.4f}")
     print(f"  Recall:    {pipe['recall']:.4f}")
@@ -344,33 +433,62 @@ def main():
     print(f"  FPR:       {pipe['fpr']:.4f}  = {pipe_fp}/({pipe_fp}+{pipe_tn})")
     print(f"  FNR:       {pipe['fnr']:.4f}  = {pipe_fn}/({pipe_fn}+{pipe_tp})")
 
-    # ── 8. Sanity check ──────────────────────────────────────────
-    print(f"\n--- Step 6: Sanity Check ---")
-    print(f"  Baseline FPR: {base['fpr']:.4f}")
-    print(f"  Pipeline FPR: {pipe['fpr']:.4f}")
-    if base["fpr"] > pipe["fpr"]:
-        print(f"  ✓ Baseline FPR > Pipeline FPR (pipeline rejects noise better)")
+    # ── 6. Sanity check N totals ──────────────────────────────────────
+    print(f"\n--- Step 5: Sanity Check ---")
+    base_total = tp + tn + fp + fn
+    print(f"  Baseline  total N: {base_total}")
+    print(f"  Pipeline  total N: {pipe_n_total}")
+    if base_total == pipe_n_total:
+        print(f"  ✓ Same N — comparison is valid (apples to apples)")
     else:
-        print(f"  ⚠ Baseline FPR ≤ Pipeline FPR (see explanation below)")
+        print(f"  ✗ Different N ({base_total} vs {pipe_n_total}) — "
+              f"key mismatch; check manifest ↔ JSONL alignment")
 
-    print(f"\n  Baseline FNR: {base['fnr']:.4f}")
-    print(f"  Pipeline FNR: {pipe['fnr']:.4f}")
-    if base["fnr"] > pipe["fnr"]:
-        print(f"  ✓ Baseline FNR > Pipeline FNR (pipeline finds more birds)")
+    if base["fpr"] > pipe["fpr"]:
+        print(f"  ✓ FPR:  Baseline {base['fpr']:.4f} > Pipeline {pipe['fpr']:.4f} "
+              f"(pipeline rejects noise better)")
+    else:
+        print(f"  ⚠ FPR: Baseline {base['fpr']:.4f} ≤ Pipeline {pipe['fpr']:.4f}")
 
-    # ── 9. Save JSON outputs ─────────────────────────────────────
+    if base["f1"] < pipe["f1"]:
+        print(f"  ✓ F1:   Baseline {base['f1']:.4f} < Pipeline {pipe['f1']:.4f} "
+              f"(pipeline better overall)")
+
+    # ── 7. Save JSON outputs ──────────────────────────────────────────
     Path("comparison").mkdir(exist_ok=True)
     Path("results/comparison_graphs").mkdir(parents=True, exist_ok=True)
 
-    with open("comparison/baseline_metrics.json", "w") as f:
-        json.dump(base, f, indent=2)
+    base_out = {k: base[k] for k in
+                ("accuracy", "precision", "recall", "f1", "fpr", "fnr",
+                 "tp", "tn", "fp", "fn")}
+    base_out["eval_set"] = "test_split"
+    base_out["threshold"] = args.threshold
+    base_out["n_total"] = base_total
+    base_out["n_bird"] = n_bird_test
+    base_out["n_noise"] = n_noise_test
 
-    pipe_out = {k: pipe[k] for k in ("accuracy", "precision", "recall", "f1", "fpr", "fnr",
-                                       "tp", "tn", "fp", "fn")}
+    pipe_out = {k: pipe[k] for k in
+                ("accuracy", "precision", "recall", "f1", "fpr", "fnr",
+                 "tp", "tn", "fp", "fn")}
+    pipe_out["eval_set"] = "test_split"
+    pipe_out["threshold"] = args.threshold
+    pipe_out["n_total"] = pipe_n_total
+    pipe_out["n_bird"] = pipe_n_bird
+    pipe_out["n_noise"] = pipe_n_noise
+
+    with open("comparison/baseline_metrics.json", "w") as f:
+        json.dump(base_out, f, indent=2)
     with open("comparison/pipeline_metrics.json", "w") as f:
         json.dump(pipe_out, f, indent=2)
 
-    comp = {"Baseline (BirdNET)": base, "Pipeline (Noise-Aware)": pipe_out}
+    comp = {
+        "note": (
+            f"Both evaluated on held-out test split (seed=42, test_frac=0.10, stratified). "
+            f"N={base_total}. Threshold={args.threshold} for both."
+        ),
+        "Baseline (BirdNET)":       base_out,
+        "Pipeline (Noise-Aware)":   pipe_out,
+    }
     with open("comparison/comparison_table.json", "w") as f:
         json.dump(comp, f, indent=2)
 
@@ -379,14 +497,22 @@ def main():
     print(f"  comparison/pipeline_metrics.json")
     print(f"  comparison/comparison_table.json")
 
-    # ── 10. Plots ─────────────────────────────────────────────────
-    print(f"\n--- Step 7: Plots ---")
-    plot_metrics_comparison(base, pipe_out, "results/comparison_graphs/metrics_comparison.png")
-    plot_error_comparison(base, pipe_out, "results/comparison_graphs/error_comparison.png")
+    # ── 8. Plots ──────────────────────────────────────────────────────
+    print(f"\n--- Step 6: Plots ---")
+    plot_metrics_comparison(
+        base_out, pipe_out,
+        "results/comparison_graphs/metrics_comparison.png",
+        n_test=base_total,
+    )
+    plot_error_comparison(
+        base_out, pipe_out,
+        "results/comparison_graphs/error_comparison.png",
+        n_test=base_total,
+    )
 
-    print(f"\n{'=' * 60}")
+    print(f"\n{'=' * 65}")
     print("  DONE")
-    print("=" * 60)
+    print("=" * 65)
 
 
 if __name__ == "__main__":

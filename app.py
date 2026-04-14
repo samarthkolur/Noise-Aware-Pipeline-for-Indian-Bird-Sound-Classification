@@ -414,13 +414,21 @@ def main() -> None:
         st.caption("AE gating: disabled or checkpoint missing (classifier-only).")
 
     inf_cfg = cfg.get("inference", {})
-    high_threshold = float(inf_cfg.get("high_threshold", 0.7))
     low_threshold = float(inf_cfg.get("low_threshold", 0.3))
 
+    # For the demo, use the F1-optimal threshold from training as the Bird boundary.
+    # The production high_threshold (0.6+) is tuned for precision in batch inference;
+    # using it in the demo makes borderline segments crowd into "Uncertain" and real
+    # bird calls into "Bird" with nothing left for "Noise" in a typical recording.
+    # optimal_threshold (e.g. 0.41) gives a more balanced and informative demo view.
+    demo_high_threshold = optimal_threshold  # Bird if prob >= this
+
     st.caption(
-        f"Routing thresholds: low={low_threshold:.2f}, high={high_threshold:.2f} "
-        f"(training optimal threshold for eval: {optimal_threshold:.2f})."
+        f"Demo routing: **Bird** if prob ≥ {demo_high_threshold:.2f} (F1-optimal threshold), "
+        f"**Noise** if prob ≤ {low_threshold:.2f}, **Uncertain** in between. "
+        f"Upload audio with mixed bird calls + background noise to see all three bands."
     )
+    high_threshold = demo_high_threshold  # used in calls below
 
     if st.button("Quick white-noise sanity test (embed → AE → MLP → routing)"):
         sr = int(cfg.get("audio", {}).get("sample_rate", 48000))
