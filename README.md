@@ -7,18 +7,18 @@ A production-ready, data-centric ML pipeline that segregates clean bird vocaliza
 Representative metrics on the iBC53 pipeline (segment counts depend on your preprocessing run). **Regenerate numbers** after training:
 
 ```bash
-python evaluate.py --config config.yaml --full-dataset
-python compute_baseline_metrics.py --config config.yaml
+python scripts/evaluate.py --config configs/config.yaml --full-dataset
+python scripts/compare.py --config configs/config.yaml
 ```
 
 | Metric | BirdNET Baseline | Noise-Aware Pipeline | Improvement |
 |--------|-----------------|---------------------|-------------|
-| **Accuracy** | 0.499 | **0.922** | +42.3 pp |
-| **Precision** | 0.773 | **0.946** | +17.3 pp |
-| **Recall** | 0.529 | **0.958** | +42.9 pp |
-| **F1 Score** | 0.628 | **0.952** | +32.4 pp |
-| **FPR** (noise misclassified as bird) | 0.619 | **0.218** | 65% reduction |
-| **FNR** (bird missed) | 0.471 | **0.042** | 91% reduction |
+| **Accuracy** | 0.570 | **0.992** | +42.2 pp |
+| **Precision** | 0.942 | **0.996** | +5.4 pp |
+| **Recall** | 0.558 | **0.995** | +43.7 pp |
+| **F1 Score** | 0.701 | **0.995** | +29.4 pp |
+| **FPR** (noise misclassified as bird) | 0.315 | **0.037** | 88% reduction |
+| **FNR** (bird missed) | 0.442 | **0.005** | 99% reduction |
 
 <p align="center">
   <img src="results/comparison_graphs/metrics_comparison.png" width="48%" />
@@ -65,7 +65,7 @@ python compute_baseline_metrics.py --config config.yaml
                             │                           │                     │
                             │              ┌────────────┴────────────┐         │
                             │              │  Three-Class Routing    │         │
-                            │              │   (see config.yaml)     │         │
+                            │              │   (see configs/config.yaml)     │         │
                             │         prob > high    between     prob < low     │
                             │              │          │            │           │
                             │              ▼          ▼            ▼           │
@@ -89,7 +89,7 @@ python compute_baseline_metrics.py --config config.yaml
 | **5. Evaluate** | `--stage evaluate` | Runs `evaluate.py` on the **held-out test split** (same stratified split as training) |
 | **6. Mine** | `--stage mine` | False positive / false negative / uncertain mining for active learning |
 
-For metrics on **every row** of `manifest.csv` (aligned with baseline comparison), run `python evaluate.py --config config.yaml --full-dataset` separately.
+For metrics on **every row** of `manifest.csv` (aligned with baseline comparison), run `python scripts/evaluate.py --config configs/config.yaml --full-dataset` separately.
 
 ---
 
@@ -113,7 +113,7 @@ pip install -r requirements.txt
 
 ### 3. Data Preparation
 
-Place raw audio files organized by species inside `iBC53/` (configurable in `config.yaml`):
+Place raw audio files organized by species inside `iBC53/` (configurable in `configs/config.yaml`):
 
 ```
 iBC53/
@@ -130,7 +130,7 @@ iBC53/
 Optional: generate extra synthetic noise WAVs into `iBC53/noise/` to reduce white-noise false positives after re-embedding and retraining:
 
 ```bash
-python generate_synthetic_noise.py --config config.yaml --n_files 50
+python scripts/generate_synthetic_noise.py --config configs/config.yaml --n_files 50
 ```
 
 ---
@@ -142,18 +142,18 @@ python generate_synthetic_noise.py --config config.yaml --n_files 50
 Runs all stages sequentially (preprocess → embed → train → infer → evaluate → mine):
 
 ```bash
-python run_pipeline.py --config config.yaml
+python scripts/run_pipeline.py --config configs/config.yaml
 ```
 
 ### Individual Stages
 
 ```bash
-python run_pipeline.py --config config.yaml --stage preprocess
-python run_pipeline.py --config config.yaml --stage embed
-python run_pipeline.py --config config.yaml --stage train
-python run_pipeline.py --config config.yaml --stage infer
-python run_pipeline.py --config config.yaml --stage evaluate
-python run_pipeline.py --config config.yaml --stage mine
+python scripts/run_pipeline.py --config configs/config.yaml --stage preprocess
+python scripts/run_pipeline.py --config configs/config.yaml --stage embed
+python scripts/run_pipeline.py --config configs/config.yaml --stage train
+python scripts/run_pipeline.py --config configs/config.yaml --stage infer
+python scripts/run_pipeline.py --config configs/config.yaml --stage evaluate
+python scripts/run_pipeline.py --config configs/config.yaml --stage mine
 ```
 
 ### Evaluation (`evaluate.py`)
@@ -162,7 +162,7 @@ python run_pipeline.py --config config.yaml --stage mine
 - **Full manifest** (same population as baseline comparison):
 
 ```bash
-python evaluate.py --config config.yaml --full-dataset
+python scripts/evaluate.py --config configs/config.yaml --full-dataset
 ```
 
 `results/metrics.json` includes `eval_split`: `"test"` or `"full"`, plus `eval_noise_count` / `eval_bird_count`. Binary routing metrics can treat the uncertain band as bird using `inference.low_threshold` (see below).
@@ -172,7 +172,7 @@ python evaluate.py --config config.yaml --full-dataset
 Uses the **full** `data/embeddings/manifest.csv`: BirdNET confidences from `comparison/baseline_normalized.jsonl` vs. MLP probabilities with **pred bird iff prob > `inference.low_threshold`** (matches routing policy used in evaluation).
 
 ```bash
-python compute_baseline_metrics.py --config config.yaml
+python scripts/compare.py --config configs/config.yaml
 ```
 
 Outputs:
@@ -185,7 +185,7 @@ Outputs:
 Runs actual BirdNET `Analyzer` inference on processed WAVs and optional `outputs/` routing folders (no JSONL shortcut):
 
 ```bash
-python evaluate_birdnet_raw_vs_pipeline.py --config config.yaml --threshold 0.5
+python scripts/compare.py --config configs/config.yaml --threshold 0.5
 ```
 
 Writes under `results/real_birdnet_eval/` (large JSON possible; may be gitignored).
@@ -193,7 +193,7 @@ Writes under `results/real_birdnet_eval/` (large JSON possible; may be gitignore
 ### Visual Evaluation Plots
 
 ```bash
-python evaluate_visual.py --config config.yaml
+python scripts/compare.py --config configs/config.yaml
 ```
 
 Generates `results/confusion_matrix.png`, `results/metrics_bar_chart.png`, and `results/threshold_comparison.png`.
@@ -203,8 +203,8 @@ Generates `results/confusion_matrix.png`, `results/metrics_bar_chart.png`, and `
 Interactive upload: segmentation, Noise Segregation V2 tabs, and full embedding → MLP → routing (uses `checkpoints/best_model.pt`).
 
 ```bash
-streamlit run app.py
-# Optional: PIPELINE_CONFIG=/path/to/config.yaml streamlit run app.py
+streamlit run app/streamlit_app.py
+# Optional: PIPELINE_CONFIG=/path/to/configs/config.yaml streamlit run app/streamlit_app.py
 ```
 
 ### Reset Cached Artifacts
@@ -212,15 +212,15 @@ streamlit run app.py
 Removes `data/processed/`, `data/embeddings/`, and `checkpoints/` (not raw `iBC53/`):
 
 ```bash
-python clean_pipeline_outputs.py           # delete
-python clean_pipeline_outputs.py --dry-run # preview only
+python scripts/clean_outputs.py           # delete
+python scripts/clean_outputs.py --dry-run # preview only
 ```
 
 ---
 
 ## Pipeline Modes
 
-Controlled by `pipeline.mode` in `config.yaml`:
+Controlled by `pipeline.mode` in `configs/config.yaml`:
 
 | Mode | V2 Scoring | Processed Outputs | Use Case |
 |------|------------|-------------------|----------|
@@ -234,7 +234,7 @@ Preprocessing order: **segment (3 s) → RMS silence drop → V2 score (filtered
 
 ## Three-Class Inference Routing
 
-Thresholds are set in `config.yaml` (`inference.high_threshold`, `inference.low_threshold`). **Current defaults** use a relaxed band to balance false negatives and false positives:
+Thresholds are set in `configs/config.yaml` (`inference.high_threshold`, `inference.low_threshold`). **Current defaults** use a relaxed band to balance false negatives and false positives:
 
 | Condition | Decision | Destination |
 |-----------|----------|---------------|
@@ -328,7 +328,7 @@ The mining stage exports candidates under `outputs/false_positives/`, `outputs/f
 ```
 Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/
 │
-├── config.yaml                          # Central YAML configuration
+├── configs/config.yaml                          # Central YAML configuration
 ├── run_pipeline.py                      # CLI entry point (6 stages)
 ├── evaluate.py                          # Standalone evaluation → results/metrics.json
 ├── evaluate_visual.py                   # Visual plots → results/*.png
@@ -382,7 +382,7 @@ Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/
 │   ├── compare_baseline_filtered.py
 │   ├── run_full_experiment.py
 │   ├── integration_config.py
-│   └── experiment_config.yaml
+│   └── experiment_configs/config.yaml
 │
 ├── utils/
 │   ├── config.py
@@ -412,7 +412,7 @@ Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/
 
 ## Configuration Reference
 
-Key settings in `config.yaml`:
+Key settings in `configs/config.yaml`:
 
 ```yaml
 pipeline:
