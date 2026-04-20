@@ -8,7 +8,7 @@ Representative metrics on the iBC53 pipeline (segment counts depend on your prep
 
 ```bash
 python scripts/evaluate.py --config configs/config.yaml --full-dataset
-python scripts/compare.py --config configs/config.yaml
+python scripts/compare.py --config configs/config.yaml --full
 ```
 
 | Metric | BirdNET Baseline | Noise-Aware Pipeline | Improvement |
@@ -29,7 +29,7 @@ python scripts/compare.py --config configs/config.yaml
 
 ## Pipeline Architecture
 
-```
+```text
                             ┌──────────────────────────────────────────────────┐
                             │           Noise-Aware Pipeline                   │
                             │                                                  │
@@ -109,7 +109,7 @@ source .venv/bin/activate  # Linux/Mac
 pip install -r requirements.txt
 ```
 
-> `birdnetlib` ships the official BirdNET V2.4 TFLite model (~50 MB). The `ai-edge-litert` package provides the TFLite runtime for Python 3.12+.
+> The official BirdNET V2.4 TFLite model must be installed via `pip install .` inside the `BirdNET-Analyzer` directory. The `ai-edge-litert` package provides the TFLite runtime for Python 3.12+.
 
 ### 3. Data Preparation
 
@@ -169,47 +169,33 @@ python scripts/evaluate.py --config configs/config.yaml --full-dataset
 
 ### Baseline vs Pipeline Comparison
 
-Uses the **full** `data/embeddings/manifest.csv`: BirdNET confidences from `comparison/baseline_normalized.jsonl` vs. MLP probabilities with **pred bird iff prob > `inference.low_threshold`** (matches routing policy used in evaluation).
+Uses the `data/embeddings/manifest.csv`: BirdNET confidences from `comparison/baseline_normalized.jsonl` vs. MLP probabilities thresholded at 0.5 (configurable).
 
 ```bash
 python scripts/compare.py --config configs/config.yaml
 ```
+Output includes `baseline_metrics.json`, `pipeline_metrics.json`, and visual plots in `results/comparison_graphs/`.
 
-Outputs:
+### Re-Generate Raw BirdNET Baseline (Slow)
 
-- `comparison/baseline_metrics.json`, `comparison/pipeline_metrics.json`, `comparison/comparison_table.json`
-- `results/comparison_graphs/metrics_comparison.png`, `results/comparison_graphs/error_comparison.png`
-
-### Strict real BirdNET vs pipeline (slow)
-
-Runs actual BirdNET `Analyzer` inference on processed WAVs and optional `outputs/` routing folders (no JSONL shortcut):
+Runs the official BirdNET `Analyzer` CLI directly on all processed WAVs. This step is heavy (~10-20 min) and writes `comparison/baseline_normalized.jsonl`.
 
 ```bash
-python scripts/compare.py --config configs/config.yaml --threshold 0.5
+python scripts/generate_baseline_official.py --config configs/config.yaml
 ```
-
-Writes under `results/real_birdnet_eval/` (large JSON possible; may be gitignored).
-
-### Visual Evaluation Plots
-
-```bash
-python scripts/compare.py --config configs/config.yaml
-```
-
-Generates `results/confusion_matrix.png`, `results/metrics_bar_chart.png`, and `results/threshold_comparison.png`.
 
 ### Streamlit Demo
 
 Interactive upload: segmentation, Noise Segregation V2 tabs, and full embedding → MLP → routing (uses `checkpoints/best_model.pt`).
 
 ```bash
-streamlit run app/streamlit_app.py
-# Optional: PIPELINE_CONFIG=/path/to/configs/config.yaml streamlit run app/streamlit_app.py
+cd app
+streamlit run streamlit_app.py
 ```
 
 ### Reset Cached Artifacts
 
-Removes `data/processed/`, `data/embeddings/`, and `checkpoints/` (not raw `iBC53/`):
+Removes `data/processed/`, `data/embeddings/`, and `checkpoints/` folders to enable a clean run:
 
 ```bash
 python scripts/clean_outputs.py           # delete
@@ -244,8 +230,6 @@ Thresholds are set in `configs/config.yaml` (`inference.high_threshold`, `infere
 
 An optional **autoencoder gate** (reconstruction-error anomaly detector) can reject out-of-distribution segments before classification when `autoencoder.enabled: true`.
 
-**Evaluation note:** `evaluate.py` can report a “routing” metric where **uncertain counts as bird** if `prob > low_threshold` only (binary bird vs noise aligned with deployment policy).
-
 ---
 
 ## Noise Segregation V2
@@ -270,7 +254,7 @@ In `full` mode, segments labeled as noise are saved to `data/processed/noise/` w
 
 ### Binary Classifier
 
-```
+```text
 Input (1024D)
   → Linear(1024, 512) → BatchNorm → ReLU → Dropout(0.3)
   → Linear(512, 256)  → BatchNorm → ReLU → Dropout(0.3)
@@ -285,127 +269,53 @@ Symmetric autoencoder trained on bird-only embeddings when `autoencoder.train: t
 
 ---
 
-## Evaluation Details
-
-### Pipeline Evaluation (`evaluate.py`)
-
-Produces `results/metrics.json` including:
-
-- Metrics at threshold 0.5 and F1-optimal threshold (test or full set per `eval_split`)
-- Per-class precision, recall, FPR on noise (when both classes exist in the evaluated subset)
-- **Routing eval:** uncertain → bird using `inference.low_threshold` / `high_threshold`
-- Threshold curve and recall-at-minimum-precision summaries
-- Probability distribution statistics per class
-- Autoencoder reconstruction error statistics when `autoencoder.enabled: true`
-- Optional comparison printout vs. `metrics_previous_run.json` for ΔFPR / ΔFNR on routing metrics
-
-### Baseline Comparison (`compute_baseline_metrics.py`)
-
-- **Ground truth:** `data/embeddings/manifest.csv` (noise = 0, any species folder = 1).
-- **Baseline:** max BirdNET detection confidence per segment from `comparison/baseline_normalized.jsonl`, thresholded (default 0.5).
-- **Pipeline:** classifier run on **all manifest rows**; binary prediction **pred bird iff sigmoid(logit) > `low_threshold`** (consistent with routing policy).
-
-**Key mapping:** noise rows under `processed/noise/` use filenames `Species__FileNum_seg…` so keys align with BirdNET JSONL paths.
-
----
-
-## Active Learning Loop
-
-```
-1. Train → Infer → Evaluate
-2. Review outputs/uncertain/ and outputs/noise/
-3. Move verified birds to verified_birds/
-4. Run: miner.update_dataset(verified_dir, target_species="<species>")
-5. Retrain → repeat
-```
-
-The mining stage exports candidates under `outputs/false_positives/`, `outputs/false_negatives/`, and uncertain samples per `mining` config.
-
----
-
 ## Project Structure
 
-```
+```text
 Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/
 │
-├── configs/config.yaml                          # Central YAML configuration
-├── run_pipeline.py                      # CLI entry point (6 stages)
-├── evaluate.py                          # Standalone evaluation → results/metrics.json
-├── evaluate_visual.py                   # Visual plots → results/*.png
-├── compute_baseline_metrics.py          # BirdNET baseline vs pipeline (full manifest)
-├── evaluate_birdnet_raw_vs_pipeline.py # Strict real BirdNET Analyzer evaluation
-├── generate_synthetic_noise.py          # Optional WAVs into raw noise/ for training
-├── app.py                               # Streamlit demo (segmentation + MLP routing)
-├── clean_pipeline_outputs.py            # Delete processed/embeddings/checkpoints
+├── configs/
+│   └── config.yaml                      # Central YAML configuration
+├── scripts/
+│   ├── run_pipeline.py                  # CLI entry point (6 stages)
+│   ├── evaluate.py                      # Standalone evaluation → results/metrics.json
+│   ├── compare.py                       # BirdNET baseline vs pipeline comparison
+│   ├── generate_baseline_official.py    # Official BirdNET-Analyzer inference integration
+│   ├── generate_synthetic_noise.py      # Optional WAVs into raw noise/ for training
+│   └── clean_outputs.py                 # Delete processed/embeddings/checkpoints
+├── app/
+│   └── streamlit_app.py                 # Streamlit UI (segmentation + MLP routing)
 ├── requirements.txt                     # Python dependencies
+├── BirdNET-Analyzer/                    # Official V2.4 TFLite Github repo
 │
-├── preprocessing/                       # Stage 1: Audio preprocessing
-│   ├── preprocessing.py                 #   Core: resample, segment, silence drop, V2 routing
-│   ├── noise_segregation_v2.py          #   Subframe noise scoring + majority vote
-│   ├── audio_loader.py
-│   ├── feature_extractor.py
-│   ├── noise_reduction.py
-│   └── preprocess_cli.py
-│
-├── embedding/                           # Stage 2: Embedding extraction
-│   ├── embedding.py                     #   BirdNET TFLite encoder, HDF5, manifest
-│   ├── embedding_model.py               #   Legacy CNN encoder (unused)
-│   └── extract_embeddings.py            #   Legacy .pt extraction (unused)
-│
-├── dataset/                             # Dataset & DataLoader
-│   ├── dataset.py                       #   EmbeddingDataset, splits, class weights
-│   ├── bird_dataset.py                  #   Legacy spectrogram dataset (unused)
-│   └── data_utils.py                    #   Legacy utilities (unused)
-│
-├── models/
-│   ├── classifier.py                    #   MLP head
-│   ├── autoencoder.py
-│   └── attention.py                     #   Experimental (unused)
-│
-├── training/
-│   ├── trainer.py
-│   ├── autoencoder_trainer.py
-│   └── metrics.py                       #   Metrics, routing-as-bird, confusion helpers
-│
-├── inference/
-│   ├── predictor.py                     #   End-to-end inference + routing
-│   └── postprocessing.py
-│
-├── mining/
-│   └── mining.py
-│
-├── birdnet_integration/                 # BirdNET-Analyzer experiment tools
-│   ├── run_baseline_birdnet.py
-│   ├── run_filtered_birdnet.py
-│   ├── normalize_birdnet_export.py
-│   ├── align_segments.py
-│   ├── compare_baseline_filtered.py
-│   ├── run_full_experiment.py
-│   ├── integration_config.py
-│   └── experiment_configs/config.yaml
-│
-├── utils/
-│   ├── config.py
-│   ├── logger.py
-│   ├── io_utils.py
-│   └── verify_env.py
-│
-├── tests/
-│   └── test_noise_segregation_v2.py
+├── src/
+│   ├── preprocessing/                   # Stage 1: Audio preprocessing
+│   │   ├── preprocessing.py             # Core: resample, segment, silence drop, V2 routing
+│   │   └── noise_segregation_v2.py      # Subframe noise scoring + majority vote
+│   ├── embedding/                       # Stage 2: Embedding extraction
+│   │   └── embedding.py                 # BirdNET TFLite encoder, HDF5, manifest
+│   ├── dataset/                         # Dataset & DataLoader
+│   │   └── dataset.py                   # EmbeddingDataset, splits, class weights
+│   ├── models/                          # Stage 3: Models
+│   │   ├── classifier.py                # MLP head
+│   │   └── autoencoder.py
+│   ├── training/                        # Training Loop & Metrics
+│   │   ├── trainer.py
+│   │   ├── autoencoder_trainer.py
+│   │   └── metrics.py
+│   ├── inference/                       # Stage 4: Inference
+│   │   └── predictor.py                 # End-to-end inference + routing
+│   └── mining/                          # Stage 6: Mining
+│       └── mining.py
 │
 ├── iBC53/                               # Raw audio (gitignored if large)
 ├── data/
-│   ├── processed/                       #   Preprocessed 3 s WAV segments
-│   └── embeddings/                      #   HDF5 + manifest.csv
-├── checkpoints/                         #   best_model.pt, autoencoder.pt, meta JSON
-├── outputs/                             #   Inference: clean_birds, noise, uncertain, mining exports
-├── results/                             #   metrics.json, plots, comparison_graphs/, real_birdnet_eval/
-└── comparison/                          #   baseline JSONL, metrics JSON, figures/
-    ├── baseline_normalized.jsonl
-    ├── baseline_metrics.json
-    ├── pipeline_metrics.json
-    ├── comparison_table.json
-    └── figures/                         #   Extra experiment plots (optional)
+│   ├── processed/                       # Preprocessed 3 s WAV segments
+│   └── embeddings/                      # HDF5 + manifest.csv
+├── checkpoints/                         # best_model.pt, autoencoder.pt, meta JSON
+├── outputs/                             # Inference: clean_birds, noise, uncertain, mining exports
+├── results/                             # metrics.json, plots, comparison_graphs/
+└── comparison/                          # baseline JSONL, metrics JSON, figures/
 ```
 
 ---
@@ -448,29 +358,6 @@ autoencoder:
 evaluation:
   results_dir: ./results
 ```
-
----
-
-## Key Technical Details
-
-- **BirdNET V2.4:** Embeddings from penultimate `GLOBAL_AVG_POOL` (1024D) via TFLite; runs on **CPU** by default (PyTorch training can use **GPU** when `device: cuda`).
-- **Noise Segregation V2:** Subframe-level features with majority vote (see `noise_segregation` block in config).
-- **Focal Loss:** Handles class imbalance; gamma configurable under `training.focal_loss`.
-- **Stratified splits:** Train / val / test from `dataset.val_split` and `dataset.test_split` (default 75% / 15% / 10%, seed=42).
-- **Audio I/O:** `soundfile` for WAV; demo supports MP3 via torchaudio where available.
-
----
-
-## Dataset
-
-**iBC53:** 50 Indian bird species. Segment counts after preprocessing depend on V2 routing and silence settings. Example scale from a completed run:
-
-| Split | Total | Bird | Noise |
-|-------|-------|------|-------|
-| Full manifest (embeddings) | ~9.8k | ~7.8k | ~2.0k |
-| Test (10%) | ~980 | — | — |
-
-Use `wc -l data/embeddings/manifest.csv` and class counts from `compute_baseline_metrics.py` for your exact numbers.
 
 ---
 
