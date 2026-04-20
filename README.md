@@ -52,15 +52,15 @@ python scripts/compare.py --config configs/config.yaml
                             │                           │                     │
                             │                           ▼                     │
                             │              ┌─────────────────────────┐         │
-                            │              │   MLP Classifier Head   │         │
-                            │              │   1024 → 512 → 256 → 1 │         │
-                            │              │   (Binary: bird/noise)  │         │
-                            │              └────────────┬────────────┘         │
-                            │                           │                     │
-                            │              ┌────────────┴────────────┐         │
                             │              │  Autoencoder Gate       │         │
                             │              │  (reconstruction error  │         │
                             │              │   anomaly detection)    │         │
+                            │              └────────────┬────────────┘         │
+                            │                           │                     │
+                            │              ┌────────────┴────────────┐         │
+                            │              │   MLP Classifier Head   │         │
+                            │              │   1024 → 512 → 256 → 1 │         │
+                            │              │   (Binary: bird/noise)  │         │
                             │              └────────────┬────────────┘         │
                             │                           │                     │
                             │              ┌────────────┴────────────┐         │
