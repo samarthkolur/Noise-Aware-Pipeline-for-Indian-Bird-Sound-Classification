@@ -20,6 +20,7 @@ import soundfile as sf
 import torch
 import torchaudio
 
+from preprocessing.noise_reduction import NoiseReducer
 from preprocessing.noise_segregation_v2 import NoiseSegregationV2
 from utils.logger import get_logger
 
@@ -90,6 +91,12 @@ class Preprocessor:
         # Derived
         self.segment_samples: int = int(self.target_sr * self.segment_duration)
 
+        # Optional denoising before V2 analysis and persistence
+        nr_cfg = cfg.get("noise_reduction", {})
+        self.noise_reducer: Optional[NoiseReducer] = None
+        if nr_cfg.get("enabled", False):
+            self.noise_reducer = NoiseReducer(cfg)
+
         # Cumulative stats for process_directory (silence drops vs raw segments)
         self._stats_raw_segments: int = 0
         self._stats_dropped_silent: int = 0
@@ -134,11 +141,15 @@ class Preprocessor:
             is_silent = rms_db < self.rms_threshold_db
 
             if self.silence_removal_enabled and is_silent:
+                self._stats_dropped_silent += 1
                 logger.debug(
                     f"  Dropping segment {idx} (RMS={rms_db:.1f} dB < "
                     f"{self.rms_threshold_db} dB)"
                 )
                 continue
+
+            if self.noise_reducer is not None:
+                seg = self.noise_reducer.reduce(seg, self.target_sr)
 
             stem = audio_path.stem
             source_species = species
@@ -218,12 +229,9 @@ class Preprocessor:
             kept.append(meta)
 
         n_raw = len(segments)
-        n_drop = n_raw - len(kept)
         self._stats_raw_segments += n_raw
-        self._stats_dropped_silent += n_drop
         logger.info(
-            f"  {audio_path.name}: {n_raw} segments -> "
-            f"{len(kept)} kept ({n_drop} silent dropped)"
+            f"  {audio_path.name}: {n_raw} raw segments -> {len(kept)} written"
         )
         return kept
 

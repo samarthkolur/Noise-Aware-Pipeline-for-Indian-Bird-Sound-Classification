@@ -1,56 +1,59 @@
 {
   "threshold_0.5": {
-    "acc": 0.9046563192904656,
-    "prec": 0.9373848987108656,
-    "rec": 0.943466172381835,
-    "f1": 0.9404157043879907
+    "acc": 0.9087017124651533,
+    "prec": 0.8881902141874631,
+    "rec": 0.9285127362366475,
+    "f1": 0.9079039871447223
   },
+  "eval_split": "full",
   "binary_eval_valid": true,
-  "dataset_noise_count": 2739,
-  "dataset_bird_count": 10788,
-  "test_noise_count": 274,
-  "test_bird_count": 1079,
+  "dataset_noise_count": 5176,
+  "dataset_bird_count": 4868,
+  "eval_noise_count": 5176,
+  "eval_bird_count": 4868,
+  "test_noise_count": 5176,
+  "test_bird_count": 4868,
   "per_class_0.5": {
-    "prec_bird": 0.9373848987108656,
-    "rec_bird": 0.943466172381835,
-    "prec_noise": 0.7715355805243446,
-    "rec_noise": 0.7518248175182481,
-    "fpr_noise": 0.24817518248175183
+    "prec_bird": 0.8881902141874631,
+    "rec_bird": 0.9285127362366475,
+    "prec_noise": 0.9297679112008073,
+    "rec_noise": 0.8900695517774343,
+    "fpr_noise": 0.10993044822256569
   },
   "routing_uncertain_as_bird": {
-    "low_threshold": 0.2,
-    "high_threshold": 0.6,
+    "low_threshold": 0.3,
+    "high_threshold": 0.7,
     "description": "pred_bird = 1 iff sigmoid(logit) > low_threshold",
-    "acc": 0.8950480413895048,
-    "prec": 0.8960270498732037,
-    "rec": 0.9823911028730306,
-    "f1": 0.9372236958443855,
-    "tn": 151,
-    "fp": 123,
-    "fn": 19,
-    "tp": 1060,
-    "fpr": 0.4489051094890511,
-    "fnr": 0.017608897126969416
+    "acc": 0.8095380326563122,
+    "prec": 0.7239654388358344,
+    "rec": 0.981101068200493,
+    "f1": 0.833144352376799,
+    "tn": 3355,
+    "fp": 1821,
+    "fn": 92,
+    "tp": 4776,
+    "fpr": 0.3518160741885626,
+    "fnr": 0.018898931799506986
   },
-  "optimal_f1_threshold": 0.41000000000000003,
+  "optimal_f1_threshold": 0.53,
   "metrics_at_optimal_f1": {
-    "acc": 0.9120473022912047,
-    "prec": 0.9308797127468582,
-    "rec": 0.9610750695088045,
-    "f1": 0.9457364341085271
+    "acc": 0.9139784946236559,
+    "prec": 0.9067452255180821,
+    "rec": 0.9168036154478225,
+    "f1": 0.9117466802860061
   },
   "per_class_optimal_f1": {
-    "prec_bird": 0.9308797127468582,
-    "rec_bird": 0.9610750695088045,
-    "prec_noise": 0.8242677824267782,
-    "rec_noise": 0.718978102189781,
-    "fpr_noise": 0.28102189781021897
+    "prec_bird": 0.9067452255180821,
+    "rec_bird": 0.9168036154478225,
+    "prec_noise": 0.920929324482624,
+    "rec_noise": 0.9113214837712519,
+    "fpr_noise": 0.08867851622874807
   },
   "reconstruction_error": {
-    "bird_mean": 0.08789897555756392,
-    "bird_std": 0.03488823784046251,
-    "noise_mean": 0.11753716148490453,
-    "noise_std": 0.04050580345790055,
-    "threshold": 0.1552462205290794
+    "bird_mean": 0.09130563371070188,
+    "bird_std": 0.03703091183208812,
+    "noise_mean": 0.11731930317427715,
+    "noise_std": 0.04332839630161364,
+    "threshold": 0.1628865972161293
   }
 }

@@ -10,12 +10,7 @@ from .dataset import (
     build_dataloaders,
 )
 
-# Legacy exports (spectrogram-based)
-from .bird_dataset import BirdAudioDataset
-from .data_utils import get_label_encoder
-
 __all__ = [
-    # New embedding-based
     "EmbeddingDataset",
     "LabelEncoder",
     "DataSplits",
@@ -23,7 +18,4 @@ __all__ = [
     "compute_class_weights",
     "make_weighted_sampler",
     "build_dataloaders",
-    # Legacy
-    "BirdAudioDataset",
-    "get_label_encoder",
 ]

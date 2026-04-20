@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
 """
 compute_baseline_metrics.py
-Compare BirdNET baseline vs Noise-Aware Pipeline — FAIR comparison on
-the same held-out TEST SPLIT (seed=42, test_frac=0.10, stratified).
+Compare BirdNET baseline vs Noise-Aware Pipeline.
+
+Default mode is a FAIR comparison on the same held-out TEST SPLIT
+(seed=42, test_frac=0.10, stratified). Optional --full-dataset mode
+evaluates both systems on every row in manifest.csv.
 
 Baseline predictions:  comparison/baseline_normalized.jsonl (confidence @0.5)
 Pipeline metrics:      recomputed from trained classifier on TEST SPLIT ONLY
                        at threshold=0.5 (same as baseline)
 Ground truth:          data/embeddings/manifest.csv (noise/ → 0, species → 1)
 
-IMPORTANT: Both systems are evaluated on the SAME ~10% held-out test split
-that was never used for MLP training (create_splits seed=42 matches trainer).
-Using the full manifest for either side would inflate pipeline numbers
-(model has seen 75% of the data) and create different sample counts.
+IMPORTANT: Test-split mode is the fair generalization comparison.
+Full-dataset mode is useful for manifest-wide operational comparison but
+includes training rows for the pipeline.
 """
 
 import csv
@@ -182,16 +184,15 @@ def metrics_from_confusion(tp, tn, fp, fn):
 
 # ── Pipeline metrics on test split ────────────────────────────────────────
 
-def compute_pipeline_metrics_test_split(
+def compute_pipeline_metrics(
     config_path: str = "config.yaml",
     threshold: float = 0.5,
+    full_dataset: bool = False,
 ) -> Tuple[dict, int, int, int]:
-    """Evaluate trained MLP on the TEST SPLIT ONLY at a given threshold.
+    """Evaluate trained MLP on test split (default) or full manifest.
 
-    This is the correct way to compare with the BirdNET baseline:
-    - Uses ONLY the held-out test indices (same seed=42 split as training)
-    - Uses threshold=0.5 by default to match the baseline's operating point
-    - NEVER touches training or validation data
+    In test-split mode this uses held-out test indices (same split as training).
+    In full-dataset mode this uses all manifest rows.
     """
     import torch
     from dataset.dataset import EmbeddingDataset, create_splits
@@ -214,8 +215,11 @@ def compute_pipeline_metrics_test_split(
         seed=cfg.get("project", {}).get("seed", 42),
     )
 
-    test_subset = Subset(ds, splits.test_idx)
-    loader = DataLoader(test_subset, batch_size=64, shuffle=False)
+    if full_dataset:
+        loader = DataLoader(ds, batch_size=64, shuffle=False)
+    else:
+        test_subset = Subset(ds, splits.test_idx)
+        loader = DataLoader(test_subset, batch_size=64, shuffle=False)
 
     model = EmbeddingClassifier(
         input_dim=cfg["embedding"]["embedding_dim"],
@@ -344,31 +348,46 @@ def main():
     parser.add_argument("--threshold",  type=float, default=0.5,
                         help="Confidence threshold for BirdNET AND MLP (default: 0.5)")
     parser.add_argument("--config",     type=str,   default="config.yaml")
+    parser.add_argument(
+        "--full-dataset",
+        action="store_true",
+        help="Compare on all manifest rows instead of only the held-out test split.",
+    )
     args = parser.parse_args()
 
     print("=" * 65)
-    print("  BASELINE vs PIPELINE — FAIR TEST-SPLIT COMPARISON")
+    if args.full_dataset:
+        print("  BASELINE vs PIPELINE — FULL-MANIFEST COMPARISON")
+    else:
+        print("  BASELINE vs PIPELINE — FAIR TEST-SPLIT COMPARISON")
     print("=" * 65)
-    print(f"  Both systems evaluated on the SAME held-out test split")
-    print(f"  (seed=42, test_frac=0.10, stratified — same split as trainer.py)")
+    if args.full_dataset:
+        print("  Both systems evaluated on the SAME full manifest")
+    else:
+        print("  Both systems evaluated on the SAME held-out test split")
+        print("  (seed=42, test_frac=0.10, stratified — same split as trainer.py)")
     print(f"  Both thresholded at {args.threshold:.2f}  (apples-to-apples)")
 
     # ── 1. Load config ──────────────────────────────────────────────
     from utils.config import load_config
     cfg = load_config(args.config)
 
-    # ── 2. Build TEST-SPLIT ground truth from manifest ──────────────
-    print(f"\n--- Step 1: Build Test-Split Ground Truth ---")
-    test_gt, test_rows = build_test_split_ground_truth(args.manifest, cfg)
+    # ── 2. Build ground truth from manifest ──────────────────────────
+    if args.full_dataset:
+        print(f"\n--- Step 1: Build Full-Manifest Ground Truth ---")
+        eval_gt = load_ground_truth(args.manifest)
+    else:
+        print(f"\n--- Step 1: Build Test-Split Ground Truth ---")
+        eval_gt, _ = build_test_split_ground_truth(args.manifest, cfg)
 
-    gt_labels = Counter(test_gt.values())
-    n_bird_test  = gt_labels[1]
-    n_noise_test = gt_labels[0]
-    n_total_test = len(test_gt)
-    print(f"  Test split size:    {n_total_test}")
-    print(f"  Bird  (y==1):       {n_bird_test}")
-    print(f"  Noise (y==0):       {n_noise_test}")
-    if n_noise_test == 0:
+    gt_labels = Counter(eval_gt.values())
+    n_bird_eval  = gt_labels[1]
+    n_noise_eval = gt_labels[0]
+    n_total_eval = len(eval_gt)
+    print(f"  Eval set size:      {n_total_eval}")
+    print(f"  Bird  (y==1):       {n_bird_eval}")
+    print(f"  Noise (y==0):       {n_noise_eval}")
+    if n_noise_eval == 0:
         print("  STOP: No noise samples in test split — FPR cannot be computed.")
         return
 
@@ -376,19 +395,19 @@ def main():
     print(f"\n--- Step 2: Load Baseline Predictions ---")
     bl = load_baseline_predictions(args.baseline)
 
-    test_keys   = set(test_gt.keys())
+    test_keys   = set(eval_gt.keys())
     bl_keys     = set(bl.keys())
     matched     = test_keys & bl_keys
-    noise_match = sum(1 for k in matched if test_gt[k] == 0)
+    noise_match = sum(1 for k in matched if eval_gt[k] == 0)
     print(f"  Test keys:          {len(test_keys)}")
     print(f"  Baseline keys:      {len(bl_keys)}")
     print(f"  Matched:            {len(matched)}")
     print(f"  GT-only (no detect):{len(test_keys - bl_keys)}  → treated as conf=0 → pred=0")
-    print(f"  Noise segs matched: {noise_match}/{n_noise_test}")
+    print(f"  Noise segs matched: {noise_match}/{n_noise_eval}")
 
     # ── 4. Baseline confusion on test split ──────────────────────────
     y_true, y_pred_base = [], []
-    for key, label in test_gt.items():
+    for key, label in eval_gt.items():
         conf = bl.get(key, 0.0)
         pred = 1 if conf >= args.threshold else 0
         y_true.append(label)
@@ -415,10 +434,14 @@ def main():
     print(f"  FNR:       {base['fnr']:.4f}  = {fn}/({fn}+{tp})")
 
     # ── 5. Pipeline on test split ─────────────────────────────────────
-    print(f"\n--- Step 4: Pipeline Metrics on Test Split (threshold={args.threshold}) ---")
-    pipe, pipe_n_noise, pipe_n_bird, pipe_n_total = compute_pipeline_metrics_test_split(
+    if args.full_dataset:
+        print(f"\n--- Step 4: Pipeline Metrics on Full Manifest (threshold={args.threshold}) ---")
+    else:
+        print(f"\n--- Step 4: Pipeline Metrics on Test Split (threshold={args.threshold}) ---")
+    pipe, pipe_n_noise, pipe_n_bird, pipe_n_total = compute_pipeline_metrics(
         config_path=args.config,
         threshold=args.threshold,
+        full_dataset=args.full_dataset,
     )
     pipe_tp, pipe_tn = pipe["tp"], pipe["tn"]
     pipe_fp, pipe_fn = pipe["fp"], pipe["fn"]
@@ -461,16 +484,16 @@ def main():
     base_out = {k: base[k] for k in
                 ("accuracy", "precision", "recall", "f1", "fpr", "fnr",
                  "tp", "tn", "fp", "fn")}
-    base_out["eval_set"] = "test_split"
+    base_out["eval_set"] = "full_manifest" if args.full_dataset else "test_split"
     base_out["threshold"] = args.threshold
     base_out["n_total"] = base_total
-    base_out["n_bird"] = n_bird_test
-    base_out["n_noise"] = n_noise_test
+    base_out["n_bird"] = n_bird_eval
+    base_out["n_noise"] = n_noise_eval
 
     pipe_out = {k: pipe[k] for k in
                 ("accuracy", "precision", "recall", "f1", "fpr", "fnr",
                  "tp", "tn", "fp", "fn")}
-    pipe_out["eval_set"] = "test_split"
+    pipe_out["eval_set"] = "full_manifest" if args.full_dataset else "test_split"
     pipe_out["threshold"] = args.threshold
     pipe_out["n_total"] = pipe_n_total
     pipe_out["n_bird"] = pipe_n_bird
@@ -481,10 +504,14 @@ def main():
     with open("comparison/pipeline_metrics.json", "w") as f:
         json.dump(pipe_out, f, indent=2)
 
+    mode_note = (
+        f"Both evaluated on held-out test split (seed=42, test_frac=0.10, stratified). "
+        if not args.full_dataset
+        else "Both evaluated on full manifest rows. "
+    )
     comp = {
         "note": (
-            f"Both evaluated on held-out test split (seed=42, test_frac=0.10, stratified). "
-            f"N={base_total}. Threshold={args.threshold} for both."
+            f"{mode_note}N={base_total}. Threshold={args.threshold} for both."
         ),
         "Baseline (BirdNET)":       base_out,
         "Pipeline (Noise-Aware)":   pipe_out,

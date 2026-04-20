@@ -7,8 +7,8 @@ Flow:
 3. Extract embeddings via configured Encoder
 4. Classify each segment via trained EmbeddingClassifier
 5. Route segments into:
-   - `outputs/clean_birds/`  (prob > high_threshold)
-   - `outputs/noise/`        (prob < low_threshold)
+   - `outputs/clean_birds/`  (prob >= high_threshold)
+   - `outputs/noise/`        (prob <= low_threshold)
    - `outputs/uncertain/`    (between thresholds — for manual review)
 """
 
@@ -49,8 +49,8 @@ class Predictor:
 
         # Thresholds
         inf_cfg = cfg.get("inference", {})
-        self.high_threshold = inf_cfg.get("high_threshold", 0.6)
-        self.low_threshold = inf_cfg.get("low_threshold", 0.2)
+        self.high_threshold = inf_cfg.get("high_threshold", 0.7)
+        self.low_threshold = inf_cfg.get("low_threshold", 0.3)
 
         # Load optimal threshold from training (if available)
         conf_thresh_raw = inf_cfg.get("confidence_threshold", "auto")
@@ -67,7 +67,7 @@ class Predictor:
         # 1. Preprocessor (resample, segment, silence removal)
         self.preprocessor = Preprocessor(cfg)
         
-        # 2. Encoder (BirdNET or placeholder)
+        # 2. BirdNET encoder
         self.encoder = build_encoder(cfg)
 
         # 3. Classifier + Label Map

@@ -25,6 +25,17 @@ from utils.logger import get_logger
 logger = get_logger(__name__)
 
 
+def _parse_segment_index_from_name(name: str) -> int:
+    stem = Path(name).stem
+    parts = stem.rsplit("_seg", 1)
+    if len(parts) == 2:
+        try:
+            return int(parts[1])
+        except ValueError:
+            return 0
+    return 0
+
+
 class Miner:
     """End-to-end active learning and hard-negative mining loop."""
 
@@ -206,7 +217,7 @@ class Miner:
             # Since these are already 3s chunks from mining, we just encode!
             emb_np = encoder.encode(waveform, sr)
             new_embeddings.append(emb_np)
-            new_filenames.append(wav_path.name)
+            new_filenames.append(str(wav_path.resolve()))
             
         # 3. Append to HDF5
         with h5py.File(target_h5, "a") as h5f:
@@ -247,7 +258,9 @@ class Miner:
                 rows.append({
                     "species": species,
                     "source_file": fn.decode("utf-8") if isinstance(fn, bytes) else fn,
-                    "segment_index": i,
+                    "segment_index": _parse_segment_index_from_name(
+                        fn.decode("utf-8") if isinstance(fn, bytes) else fn
+                    ),
                     "embedding_dim": self.cfg["embedding"]["embedding_dim"],
                     "model_name": "birdnet_v2.4",
                     "sample_rate": self.cfg["audio"]["sample_rate"],

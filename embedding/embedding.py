@@ -2,8 +2,8 @@
 embedding.py — Embedding extraction pipeline.
 
 Provides a unified interface for extracting fixed-size audio embeddings
-using either BirdNET (via birdnetlib / TFLite) or a built-in placeholder
-CNN encoder.  Embeddings are stored in HDF5 (one file per species) with
+using BirdNET V2.4 (via TFLite). Embeddings are stored in HDF5 (one file
+per species) with
 a global manifest CSV for fast downstream querying.
 
 Storage layout:
@@ -26,7 +26,6 @@ from typing import Dict, List, Optional, Tuple
 import h5py
 import numpy as np
 import torch
-import torch.nn as nn
 from tqdm import tqdm
 
 from utils.logger import get_logger
@@ -229,7 +228,7 @@ class BirdNETEncoder(BaseEncoder):
         print(
             "[BirdNET] Resolved model path:",
             self._model_path,
-            "| load OK | encoder=BirdNET (not placeholder)",
+            "| load OK | encoder=BirdNET",
         )
         logger.info(
             f"BirdNET V2.4 loaded ✓  (model: {Path(self._model_path).name}, "
@@ -434,98 +433,21 @@ class BirdNETEncoder(BaseEncoder):
 
 
 # ════════════════════════════════════════════════════════════
-#  Placeholder CNN encoder (PyTorch)
-# ════════════════════════════════════════════════════════════
-
-class PlaceholderEncoder(BaseEncoder):
-    """Lightweight CNN encoder for development / testing.
-
-    Operates on mel-spectrograms and produces **1024-D** embeddings.
-    Weights are randomly initialised — swap for real weights via
-    ``load_state_dict`` when available.
-    """
-
-    _EMB_DIM = 1024
-
-    def __init__(self, cfg: dict) -> None:
-        self.cfg = cfg
-        self.device = _resolve_device(cfg)
-        self._sr = cfg["audio"]["sample_rate"]
-        n_mels = cfg["features"]["n_mels"]
-        n_fft = cfg["features"]["n_fft"]
-        hop = cfg["features"]["hop_length"]
-
-        self._mel = torchaudio.transforms.MelSpectrogram(
-            sample_rate=self._sr,
-            n_fft=n_fft,
-            hop_length=hop,
-            n_mels=n_mels,
-            f_min=cfg["features"]["f_min"],
-            f_max=cfg["features"]["f_max"],
-        ).to(self.device)
-
-        self._model = nn.Sequential(
-            nn.Conv2d(1, 64, 3, padding=1),
-            nn.BatchNorm2d(64),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(2),
-            nn.Conv2d(64, 128, 3, padding=1),
-            nn.BatchNorm2d(128),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(2),
-            nn.Conv2d(128, 256, 3, padding=1),
-            nn.BatchNorm2d(256),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(256, 512, 3, padding=1),
-            nn.BatchNorm2d(512),
-            nn.ReLU(inplace=True),
-            nn.AdaptiveAvgPool2d((1, 1)),
-            nn.Flatten(),
-            nn.Linear(512, self._EMB_DIM),
-        ).to(self.device)
-        self._model.eval()
-
-    # ── BaseEncoder interface ──────────────────────────────
-
-    @torch.no_grad()
-    def encode(self, waveform: np.ndarray, sr: int) -> np.ndarray:
-        wav_t = torch.from_numpy(waveform).float().unsqueeze(0).to(self.device)
-        mel = self._mel(wav_t)                   # (1, n_mels, T)
-        mel = torch.log(mel + 1e-9)
-        mel = mel.unsqueeze(0)                    # (1, 1, n_mels, T)
-        emb = self._model(mel)                    # (1, 1024)
-        return emb.squeeze(0).cpu().numpy()
-
-    @property
-    def embedding_dim(self) -> int:
-        return self._EMB_DIM
-
-    @property
-    def name(self) -> str:
-        return "placeholder_cnn"
-
-
-# ════════════════════════════════════════════════════════════
 #  Encoder factory
 # ════════════════════════════════════════════════════════════
 
 def build_encoder(cfg: dict) -> BaseEncoder:
-    """Instantiate the encoder specified in ``cfg['embedding']['model_name']``.
+    """Instantiate the production BirdNET encoder.
 
-    For ``birdnet``, raises ``BirdNETModelNotFoundError`` if the TFLite file is
-    missing (no fallback to another encoder).
+    Raises ``BirdNETModelNotFoundError`` if the TFLite file is missing.
     """
     model_name = cfg["embedding"]["model_name"]
     if model_name in ("birdnet", "birdnet_v2.4"):
         return BirdNETEncoder(cfg)
-    elif model_name in ("placeholder", "custom_cnn"):
-        import torchaudio
-        return PlaceholderEncoder(cfg)
-    else:
-        raise ValueError(
-            f"Unknown embedding model: '{model_name}'. "
-            f"Valid options: birdnet, placeholder"
-        )
+    raise ValueError(
+        f"Unsupported embedding model: '{model_name}'. "
+        "This production pipeline requires embedding.model_name: 'birdnet'."
+    )
 
 
 # ════════════════════════════════════════════════════════════
@@ -707,16 +629,11 @@ class EmbeddingPipeline:
     def __init__(self, cfg: dict) -> None:
         self.cfg = cfg
         mn = cfg.get("embedding", {}).get("model_name", "")
-        if mn == "placeholder":
+        if mn not in ("birdnet", "birdnet_v2.4"):
             raise RuntimeError(
-                "Embedding extraction requires embedding.model_name: 'birdnet'. "
-                "Placeholder embeddings are not allowed for this pipeline."
+                "Embedding extraction requires embedding.model_name: 'birdnet'."
             )
         self.encoder = build_encoder(cfg)
-        if getattr(self.encoder, "name", "") == "placeholder_cnn":
-            raise RuntimeError(
-                "Encoder is placeholder_cnn; use model_name: birdnet with a valid BirdNET .tflite."
-            )
         self.processed_dir = Path(cfg["data"]["processed_dir"])
         self.embeddings_dir = Path(cfg["data"]["embeddings_dir"])
         self.sample_rate = cfg["audio"]["sample_rate"]

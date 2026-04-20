@@ -189,8 +189,7 @@ python scripts/generate_baseline_official.py --config configs/config.yaml
 Interactive upload: segmentation, Noise Segregation V2 tabs, and full embedding → MLP → routing (uses `checkpoints/best_model.pt`).
 
 ```bash
-cd app
-streamlit run streamlit_app.py
+streamlit run app.py
 ```
 
 ### Reset Cached Artifacts
@@ -220,7 +219,7 @@ Preprocessing order: **segment (3 s) → RMS silence drop → V2 score (filtered
 
 ## Three-Class Inference Routing
 
-Thresholds are set in `configs/config.yaml` (`inference.high_threshold`, `inference.low_threshold`). **Current defaults** use a relaxed band to balance false negatives and false positives:
+Thresholds are set in `configs/config.yaml` (`inference.high_threshold`, `inference.low_threshold`). The production defaults follow the report architecture:
 
 | Condition | Decision | Destination |
 |-----------|----------|---------------|
@@ -329,7 +328,7 @@ pipeline:
   mode: full                # baseline | filtered | full
 
 silence_removal:
-  rms_threshold_db: -52.0   # quieter segments kept vs. very aggressive -40 dB
+  rms_threshold_db: -40.0   # report default RMS gate
 
 embedding:
   model_name: birdnet
@@ -347,8 +346,8 @@ training:
 
 inference:
   confidence_threshold: auto  # F1-optimal from training when auto
-  high_threshold: 0.6         # prob > this → confident bird
-  low_threshold: 0.2          # prob < this → confident noise; routing eval uses this for “uncertain as bird”
+  high_threshold: 0.7         # report default confident bird threshold
+  low_threshold: 0.3          # report default confident noise threshold
 
 autoencoder:
   enabled: true

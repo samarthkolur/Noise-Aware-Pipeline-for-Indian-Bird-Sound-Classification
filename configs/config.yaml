@@ -1,0 +1,140 @@
+# Compatibility copy of the root config so README-documented paths work.
+# Keep this aligned with the repo-root config.yaml.
+
+project:
+  name: bioacoustic_pipeline
+  seed: 42
+  device: auto
+
+data:
+  raw_dir: ./iBC53
+  processed_dir: ./data/processed
+  embeddings_dir: ./data/embeddings
+  output_dir: ./outputs
+
+audio:
+  sample_rate: 48000
+  segment_duration_s: 3.0
+  overlap: 0.0
+  mono: true
+
+features:
+  type: mel_spectrogram
+  n_fft: 2048
+  hop_length: 512
+  n_mels: 128
+  f_min: 150
+  f_max: 15000
+
+noise_reduction:
+  enabled: true
+  method: spectral_gating
+  spectral_gating:
+    n_std_thresh: 1.5
+    prop_decrease: 1.0
+  bandpass:
+    low_freq: 150
+    high_freq: 15000
+
+silence_removal:
+  enabled: true
+  rms_threshold_db: -40.0
+
+pipeline:
+  mode: full
+  write_segments_manifest: true
+
+noise_segregation:
+  v2:
+    subframe_duration_s: 0.5
+    vote_threshold: 0.3
+    majority_tie: bird
+    target_rms_db: -20.0
+    w_zcr: 0.25
+    w_flat: 0.30
+    w_centroid_flag: 0.15
+    w_centroid_std: 0.15
+    w_insect: 0.15
+    zcr_ref: 0.30
+    flatness_ref: 1.0
+    centroid_std_ref: 2500.0
+    centroid_low_hz: 400.0
+    centroid_high_hz: 7000.0
+    insect_lag_min_hz: 200.0
+    insect_lag_max_hz: 2000.0
+    insect_peak_thresh: 0.35
+
+embedding:
+  model_name: birdnet
+  embedding_dim: 1024
+  birdnet_model_path: auto
+  batch_size: 64
+  num_workers: 4
+  storage_format: hdf5
+
+dataset:
+  val_split: 0.15
+  test_split: 0.10
+  stratify: true
+  augmentation:
+    enabled: true
+    time_shift_ms: 100
+    noise_snr_db: [5, 15]
+    frequency_mask: 10
+
+model:
+  type: classifier
+  binary: true
+  num_classes: 53
+  hidden_dims: [512, 256]
+  dropout: 0.3
+
+autoencoder:
+  enabled: true
+  train: true
+  epochs: 30
+  learning_rate: 0.001
+  batch_size: 64
+  checkpoint_path: ./checkpoints/autoencoder.pt
+  recon_threshold: auto
+
+training:
+  epochs: 50
+  batch_size: 32
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  scheduler: cosine
+  early_stopping:
+    enabled: true
+    patience: 7
+    min_delta: 0.001
+  loss: focal
+  focal_loss:
+    gamma: 2.0
+    alpha: null
+  label_smoothing: 0.1
+  checkpoint_dir: ./checkpoints
+  log_dir: ./logs
+
+inference:
+  checkpoint: ./checkpoints/best_model.pt
+  confidence_threshold: auto
+  high_threshold: 0.7
+  low_threshold: 0.3
+  top_k: 3
+  streamlit_use_autoencoder: true
+  temporal_smoothing:
+    enabled: true
+    window_size: 5
+
+mining:
+  hard_negatives:
+    enabled: true
+    k_neighbours: 10
+    distance_metric: cosine
+  active_learning:
+    strategy: uncertainty
+    query_budget: 100
+
+evaluation:
+  results_dir: ./results

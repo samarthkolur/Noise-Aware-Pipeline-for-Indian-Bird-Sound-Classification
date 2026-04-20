@@ -1,0 +1,19 @@
+{
+  "source_file": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/.streamlit_demo/2.wav_4741676/upload.wav",
+  "species": "uploaded_demo",
+  "segment_index": 6,
+  "start_sec": 18.0,
+  "end_sec": 21.0,
+  "duration_sec": 3.0,
+  "sample_rate": 48000,
+  "num_samples": 144000,
+  "rms_db": -15.88,
+  "is_silent": false,
+  "output_path": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/.streamlit_demo/2.wav_4741676/segments/uploaded_demo/upload_seg0006.wav",
+  "pipeline_mode": "full",
+  "v2_label": "bird",
+  "v2_mean_score": 0.2701,
+  "v2_noise_subframe_votes": 0,
+  "v2_total_subframes": 6,
+  "source_species": "uploaded_demo"
+}

@@ -1,15 +1,59 @@
 {
   "threshold_0.5": {
-    "accuracy": 0.9224489795918367,
-    "precision": 0.9457755359394704,
-    "recall": 0.9578544061302682,
-    "f1": 0.9517766497461929
+    "acc": 0.9087017124651533,
+    "prec": 0.8881902141874631,
+    "rec": 0.9285127362366475,
+    "f1": 0.9079039871447223
   },
-  "best_threshold": {
-    "threshold": 0.49,
-    "accuracy": 0.9214285714285714,
-    "precision": 0.9445843828715366,
-    "recall": 0.9578544061302682,
-    "f1": 0.9511731135066582
+  "eval_split": "full",
+  "binary_eval_valid": true,
+  "dataset_noise_count": 5176,
+  "dataset_bird_count": 4868,
+  "eval_noise_count": 5176,
+  "eval_bird_count": 4868,
+  "test_noise_count": 5176,
+  "test_bird_count": 4868,
+  "per_class_0.5": {
+    "prec_bird": 0.8881902141874631,
+    "rec_bird": 0.9285127362366475,
+    "prec_noise": 0.9297679112008073,
+    "rec_noise": 0.8900695517774343,
+    "fpr_noise": 0.10993044822256569
+  },
+  "routing_uncertain_as_bird": {
+    "low_threshold": 0.3,
+    "high_threshold": 0.7,
+    "description": "pred_bird = 1 iff sigmoid(logit) > low_threshold",
+    "acc": 0.8095380326563122,
+    "prec": 0.7239654388358344,
+    "rec": 0.981101068200493,
+    "f1": 0.833144352376799,
+    "tn": 3355,
+    "fp": 1821,
+    "fn": 92,
+    "tp": 4776,
+    "fpr": 0.3518160741885626,
+    "fnr": 0.018898931799506986
+  },
+  "optimal_f1_threshold": 0.53,
+  "metrics_at_optimal_f1": {
+    "acc": 0.9139784946236559,
+    "prec": 0.9067452255180821,
+    "rec": 0.9168036154478225,
+    "f1": 0.9117466802860061
+  },
+  "per_class_optimal_f1": {
+    "prec_bird": 0.9067452255180821,
+    "rec_bird": 0.9168036154478225,
+    "prec_noise": 0.920929324482624,
+    "rec_noise": 0.9113214837712519,
+    "fpr_noise": 0.08867851622874807
+  },
+  "reconstruction_error": {
+    "bird_mean": 0.09130563371070188,
+    "bird_std": 0.03703091183208812,
+    "noise_mean": 0.11731930317427715,
+    "noise_std": 0.04332839630161364,
+    "threshold": 0.1628865972161293
   }
 }
