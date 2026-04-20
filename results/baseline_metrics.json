@@ -1,0 +1,15 @@
+{
+  "total_records": 1368,
+  "bird_segments": 1368,
+  "noise_segments": 0,
+  "no_detection_count": 610,
+  "fpr": null,
+  "noise_false_positives": 0,
+  "noise_true_negatives": 0,
+  "accuracy": 0.227,
+  "accuracy_among_detected": 0.4038,
+  "genus_accuracy": 0.3297,
+  "precision_macro": 0.1465,
+  "recall_macro": 0.0964,
+  "f1_macro": 0.1089
+}

@@ -11,12 +11,15 @@ soundfile>=0.12
 matplotlib>=3.7
 seaborn>=0.12
 
-# Machine Learning
+# Machine Learning (metrics only — no training)
 scikit-learn>=1.3
 
-# BirdNET inference
-# NOTE: BirdNET is used as a pre-trained model checkpoint, not a pip package.
-# Download weights from: https://github.com/kahst/BirdNET-Analyzer
+# BirdNET inference (black-box, pre-trained)
+# birdnetlib ships BirdNET V2.4 TFLite weights — no manual download needed
+birdnetlib>=0.15.0
+
+# TFLite runtime for Python 3.12+ (replaces deprecated tflite-runtime)
+ai-edge-litert>=1.0.0
 
 # Dataset download
 kaggle>=1.5

@@ -39,15 +39,6 @@ total_noise      = 0
 per_species_stats = {}   # species_name -> {total, bird, noise}
 
 
-# ─── Startup Check ──────────────────────────────────────────────────────
-if not os.path.isdir(INPUT_ROOT):
-    raise FileNotFoundError(
-        f"\n[ERROR] Dataset directory not found: '{INPUT_ROOT}'\n"
-        "Please download the dataset first by running:\n"
-        "    python download_ibc53.py\n"
-    )
-
-
 # ─── Waveform Utilities ───────────────────────────────────────────────────────
 
 def normalize_waveform(y, sr):
@@ -338,6 +329,12 @@ def process_all():
     Discover all .wav files under INPUT_ROOT and process each one.
     Prints a summary and writes a CSV report after completion.
     """
+    if not os.path.isdir(INPUT_ROOT):
+        raise FileNotFoundError(
+            f"\n[ERROR] Dataset directory not found: '{INPUT_ROOT}'\n"
+            "Please download the dataset first by running:\n"
+            "    python download_ibc53.py\n"
+        )
     audio_files = glob.glob(f"{INPUT_ROOT}/**/*.wav", recursive=True)
     print(f"Searching inside: {INPUT_ROOT}")
     print(f"Found {len(audio_files)} files")

@@ -1,0 +1,57 @@
+{
+  "detection_precision": {
+    "baseline": null,
+    "processed": 0.9365,
+    "delta": null
+  },
+  "detection_recall": {
+    "baseline": null,
+    "processed": 0.3256,
+    "delta": null
+  },
+  "detection_f1": {
+    "baseline": null,
+    "processed": 0.4832,
+    "delta": null
+  },
+  "detection_rate": {
+    "baseline": null,
+    "processed": 0.3256,
+    "delta": null
+  },
+  "fpr": {
+    "baseline": null,
+    "processed": 0.1514,
+    "delta": null
+  },
+  "accuracy": {
+    "baseline": 0.227,
+    "processed": 0.185,
+    "delta": -0.042
+  },
+  "accuracy_among_detected": {
+    "baseline": 0.4038,
+    "processed": 0.5681,
+    "delta": 0.1643
+  },
+  "genus_accuracy": {
+    "baseline": 0.3297,
+    "processed": 0.2314,
+    "delta": -0.0983
+  },
+  "precision_macro": {
+    "baseline": 0.1465,
+    "processed": 0.1707,
+    "delta": 0.0242
+  },
+  "recall_macro": {
+    "baseline": 0.0964,
+    "processed": 0.0744,
+    "delta": -0.022
+  },
+  "f1_macro": {
+    "baseline": 0.1089,
+    "processed": 0.0912,
+    "delta": -0.0177
+  }
+}
