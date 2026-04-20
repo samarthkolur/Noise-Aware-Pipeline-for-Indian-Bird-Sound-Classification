@@ -73,23 +73,23 @@
 % ---------------- HEADER HEIGHT FIX ----------------
 \setlength{\headheight}{15pt}
 
-% ---------------- PLAIN STYLE ----------------
+% ---------------- PLAIN STYLE (front matter: no header, footer with rule) ----------------
 \fancypagestyle{plain}{
     \fancyhf{}
-    \fancyfoot[L]{Dept. of CST, DSU}
-    \fancyfoot[R]{\thepage}
+    \fancyfoot[L]{\small Dept. of CST, DSU}
+    \fancyfoot[R]{\small\thepage}
     \renewcommand{\headrulewidth}{0pt}
-    \renewcommand{\footrulewidth}{0pt}
+    \renewcommand{\footrulewidth}{0.4pt}
 }
 
-% ---------------- MAIN PAGE STYLE ----------------
+% ---------------- MAIN PAGE STYLE (body: centered title header + rules) ----------------
 \pagestyle{fancy}
 \fancyhf{}
-\fancyhead[L]{\small\textbf{Noise-Aware Pipeline for Indian Bird Sound Classification Using BirdNET Embeddings}}
-\fancyfoot[L]{Dept. of CST, DSU}
-\fancyfoot[R]{\thepage}
-\renewcommand{\headrulewidth}{0pt}
-\renewcommand{\footrulewidth}{0pt}
+\fancyhead[C]{\small\textbf{Noise-Aware Pipeline for Indian Bird Sound Classification Using BirdNET Embeddings}}
+\fancyfoot[L]{\small Dept. of CST, DSU}
+\fancyfoot[R]{\small\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0.4pt}
 
 \begin{document}
 \pagenumbering{gobble}
@@ -129,15 +129,15 @@ Bangalore South Dt., Bengaluru -- 562112}}
 
 \vspace{0.8cm}
 
-{\fontsize{20}{24}\selectfont\textbf{Minor Project (23CT3613)}} \\[4pt]
-{\fontsize{20}{24}\selectfont\textbf{Report on}}
+{\fontsize{20}{24}\selectfont\textcolor{red}{\textbf{Minor Project (23CT3613)}}} \\[4pt]
+{\fontsize{20}{24}\selectfont\textcolor{red}{\textbf{Report on}}}
 
 \vspace{0.6cm}
 
-{\fontsize{20}{24}\selectfont\textbf{
+{\fontsize{20}{24}\selectfont\textcolor{red}{\textbf{
 Noise-Aware Pipeline for Indian Bird Sound Classification\\
 Using BirdNET Embeddings and Learned Gating
-}}
+}}}
 
 \vspace{1cm}
 
@@ -145,11 +145,11 @@ Using BirdNET Embeddings and Learned Gating
 
 \vspace{0.4cm}
 
-\begin{tabular}{ll}
-{\fontsize{15}{18}\selectfont\textbf{Samarth D Kolur}} & {\fontsize{15}{18}\selectfont\textbf{ENG23CT0019}} \\[4pt]
-{\fontsize{15}{18}\selectfont\textbf{Manoj C}}         & {\fontsize{15}{18}\selectfont\textbf{ENG23CT0031}} \\[4pt]
-{\fontsize{15}{18}\selectfont\textbf{Mithun Krishnan}} & {\fontsize{15}{18}\selectfont\textbf{ENG23CT0034}} \\[4pt]
-{\fontsize{15}{18}\selectfont\textbf{Yashaswini R}}    & {\fontsize{15}{18}\selectfont\textbf{ENG23CT0044}} \\
+\begin{tabular}{l@{\hspace{1.5cm}}l}
+{\fontsize{15}{18}\selectfont\textbf{Samarth D Kolur}} & {\fontsize{15}{18}\selectfont\textbf{-- ENG23CT0019}} \\[4pt]
+{\fontsize{15}{18}\selectfont\textbf{Manoj C}}         & {\fontsize{15}{18}\selectfont\textbf{-- ENG23CT0031}} \\[4pt]
+{\fontsize{15}{18}\selectfont\textbf{Mithun Krishnan}} & {\fontsize{15}{18}\selectfont\textbf{-- ENG23CT0034}} \\[4pt]
+{\fontsize{15}{18}\selectfont\textbf{Yashaswini R}}    & {\fontsize{15}{18}\selectfont\textbf{-- ENG23CT0044}} \\
 \end{tabular}
 
 \vspace{1cm}
@@ -196,32 +196,26 @@ Using BirdNET Embeddings and Learned Gating
 This is to certify that the work titled
 ``\textbf{Noise-Aware Pipeline for Indian Bird Sound Classification Using BirdNET Embeddings and Learned Gating}''
 is carried out by
-\textbf{Samarth D Kolur -- ENG23CT0019},
-\textbf{Manoj C -- ENG23CT0031},
-\textbf{Mithun Krishnan -- ENG23CT0034},
-and \textbf{Yashaswini R -- ENG23CT0044},
-bonafide students of Bachelor of Technology in Computer Science and Technology at the School of Engineering,
-Dayananda Sagar University, Bangalore, in partial fulfillment for the award of degree in Bachelor
-of Technology in Computer Science and Technology during the academic year 2025--2026.
+\textbf{Samarth D Kolur (ENG23CT0019)},
+\textbf{Manoj C (ENG23CT0031)},
+\textbf{Mithun Krishnan (ENG23CT0034)},
+and \textbf{Yashaswini R (ENG23CT0044)},
+bonafide students of Bachelor of Technology in \textbf{Computer Science \& Technology}
+at the School of Engineering, Dayananda Sagar University, Bangalore, in partial fulfillment
+for the award of degree in Bachelor of Technology in \textbf{Computer Science \& Technology},
+during the year 2025--2026.
 
-\vspace{2cm}
+\vspace{3cm}
 
 \noindent
-\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} c c}
-\textbf{Dr. Ramandeep Kaur} & \textbf{Dr. Shahina M Parveen} \\[6pt]
-\begin{tabular}{c}
-Assistant Professor,\\
-Dept. of CST,\\
-School of Engineering,\\
-Dayananda Sagar University.
-\end{tabular}
-&
-\begin{tabular}{c}
-Chairperson, CST,\\
-Dept. of CST,\\
-School of Engineering,\\
-Dayananda Sagar University.
-\end{tabular}
+\begin{tabular*}{\textwidth}{@{}p{0.45\textwidth}@{\hfill}p{0.45\textwidth}@{}}
+\textbf{Dr. Ramandeep Kaur} & \textbf{Dr. M Shahina Parveen} \\[4pt]
+\small Assistant Professor, Dept. of CST, &
+\small Professor and Chairperson CST, \\
+\small School of Engineering, &
+\small School of Engineering, \\
+\small Dayananda Sagar University. &
+\small Dayananda Sagar University.
 \end{tabular*}
 
 \vspace{1.5cm}
@@ -257,30 +251,35 @@ Dayananda Sagar University.
 \vspace{0.8cm}
 
 \justify
-We, \textbf{Samarth D Kolur -- ENG23CT0019},
-\textbf{Manoj C -- ENG23CT0031},
-\textbf{Mithun Krishnan -- ENG23CT0034},
-and \textbf{Yashaswini R -- ENG23CT0044},
-are students of the \textbf{sixth semester} B.Tech in Computer Science and Technology at the
-School of Engineering, Dayananda Sagar University. We hereby declare that the minor project titled
+We, \textbf{Samarth D Kolur (ENG23CT0019)},
+\textbf{Manoj C (ENG23CT0031)},
+\textbf{Mithun Krishnan (ENG23CT0034)},
+and \textbf{Yashaswini R (ENG23CT0044)},
+are students of the \textbf{sixth semester} B.Tech in \textbf{Computer Science \& Technology},
+at School of Engineering, Dayananda Sagar University, hereby declare that the minor project
 ``\textbf{Noise-Aware Pipeline for Indian Bird Sound Classification Using BirdNET Embeddings and Learned Gating}''
 has been carried out by us and submitted in partial fulfillment for the award of degree
-in Bachelor of Technology in Computer Science and Technology during the academic year 2025--2026.
+in Bachelor of Technology in \textbf{Computer Science \& Technology},
+during the academic year 2025--2026.
 
 \vspace{0.8cm}
 
-\begin{tabular}{p{0.08\textwidth} p{0.5\textwidth} p{0.32\textwidth}}
-\textbf{Sl.No.} & \textbf{Name and USN} & \textbf{Student Signature} \\[8pt]
-1 & Samarth D Kolur \newline ENG23CT0019 & \\[12pt]
-2 & Manoj C \newline ENG23CT0031 & \\[12pt]
-3 & Mithun Krishnan \newline ENG23CT0034 & \\[12pt]
-4 & Yashaswini R \newline ENG23CT0044 & \\
-\end{tabular}
+\begin{tabular*}{\textwidth}{@{}p{0.45\textwidth}@{\hfill}p{0.45\textwidth}@{}}
+\textbf{Name and USN} & \textbf{Student Signature} \\[10pt]
+Name1: Samarth D Kolur & \\
+USN\phantom{1}: ENG23CT0019 & \\[8pt]
+Name2: Manoj C & \\
+USN\phantom{1}: ENG23CT0031 & \\[8pt]
+Name3: Mithun Krishnan & \\
+USN\phantom{1}: ENG23CT0034 & \\[8pt]
+Name4: Yashaswini R & \\
+USN\phantom{1}: ENG23CT0044 & \\
+\end{tabular*}
 
-\vspace{1.5cm}
+\vspace{2cm}
 
 \noindent
-\hspace{0.5cm} Place: DSU, Bangalore \hfill Date:
+Place: Bangalore \hfill Date:
 
 % -------------------------
 % ACKNOWLEDGEMENT
@@ -416,7 +415,7 @@ Machine Learning, MLP Classifier, Autoencoder, Active Learning, Acoustic Feature
 % CHAPTER 1
 % ======================================================
 \newpage
-\thispagestyle{plain}
+\thispagestyle{fancy}
 
 \begin{flushleft}
 {\fontsize{16}{18}\bfseries CHAPTER 1}
@@ -556,7 +555,7 @@ followed by a clear definition of the problem and the specific objectives of the
 % CHAPTER 2
 % ======================================================
 \newpage
-\thispagestyle{plain}
+\thispagestyle{fancy}
 
 \begin{flushleft}
 {\fontsize{16}{18}\bfseries CHAPTER 2}
@@ -714,7 +713,7 @@ into a unified and noise-aware pipeline.
 % CHAPTER 3
 % ======================================================
 \newpage
-\thispagestyle{plain}
+\thispagestyle{fancy}
 
 \begin{flushleft}
 {\fontsize{16}{18}\bfseries CHAPTER 3}
@@ -1071,7 +1070,7 @@ in the system.
 % CHAPTER 4
 % ======================================================
 \newpage
-\thispagestyle{plain}
+\thispagestyle{fancy}
 
 \begin{flushleft}
 {\fontsize{16}{18}\bfseries CHAPTER 4}
@@ -1267,7 +1266,7 @@ noise-routed segments are clearly distinguished, and uncertain segments are flag
 % CHAPTER 5
 % ======================================================
 \newpage
-\thispagestyle{plain}
+\thispagestyle{fancy}
 
 \begin{flushleft}
 {\fontsize{16}{18}\bfseries CHAPTER 5}
