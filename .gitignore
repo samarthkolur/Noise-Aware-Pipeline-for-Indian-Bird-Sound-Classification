@@ -40,6 +40,7 @@ results/real_birdnet_eval/real_birdnet_eval.json
 
 # ── Misc ────────────────────────────────────
 *.log
+*.pid
 *.h5
 *.hdf5
 *.tflite
