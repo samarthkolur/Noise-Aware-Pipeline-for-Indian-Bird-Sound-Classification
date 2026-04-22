@@ -1,0 +1,17 @@
+{
+  "accuracy": 0.5154228855721393,
+  "precision": 0.0,
+  "recall": 0.0,
+  "f1": 0.0,
+  "fpr": 0.0,
+  "fnr": 1.0,
+  "tp": 0,
+  "tn": 518,
+  "fp": 0,
+  "fn": 487,
+  "eval_set": "test_split",
+  "threshold": 0.5,
+  "n_total": 1005,
+  "n_bird": 487,
+  "n_noise": 518
+}

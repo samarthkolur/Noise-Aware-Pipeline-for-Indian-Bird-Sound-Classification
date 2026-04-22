@@ -1,0 +1,486 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit,calc,shapes.geometric,backgrounds}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\tikzset{
+  pipbox/.style={draw,rounded corners=2pt,align=center,inner sep=3pt,minimum height=0.72cm,font=\footnotesize},
+  pipsmall/.style={draw,rounded corners=2pt,align=center,inner sep=2pt,font=\scriptsize,minimum height=0.55cm},
+  arr/.style={-Latex,thick,shorten >=1pt,shorten <=1pt},
+  arrd/.style={-Latex,thick,dashed,shorten >=1pt,shorten <=1pt}
+}
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+\begin{document}
+
+\title{Noise-Aware Pipeline for Indian Bird Sound Classification Using BirdNET Embeddings and Learned Gating}
+
+\author{\IEEEauthorblockN{1\textsuperscript{st} Samarth D Kolur}
+\IEEEauthorblockA{\textit{Computer Science and Technology} \\
+\textit{Dayananda Sagar University}\\
+Bengaluru, India \\
+samarthdkolur1@gmail.com}
+\and
+\IEEEauthorblockN{2\textsuperscript{nd} Yashaswini R}
+\IEEEauthorblockA{\textit{Computer Science and Technology} \\
+\textit{Dayananda Sagar University}\\
+Bengaluru, India \\
+rygowda1703@gmail.com}
+\and
+\IEEEauthorblockN{3\textsuperscript{rd} Mithun Krishnan}
+\IEEEauthorblockA{\textit{Computer Science and Technology} \\
+\textit{Dayananda Sagar University}\\
+Bengaluru, India \\
+mithunkrishnan82@gmail.com}
+\and
+\IEEEauthorblockN{4\textsuperscript{th} Manoj C}
+\IEEEauthorblockA{\textit{Computer Science and Technology} \\
+\textit{Dayananda Sagar University}\\
+Bengaluru, India \\
+manojchandrashekhar.058@gmail.com}
+\and
+\IEEEauthorblockN{5\textsuperscript{th} Dr.\ Ramandeep Kaur}
+\IEEEauthorblockA{\textit{Computer Science and Technology} \\
+\textit{Dayananda Sagar University}\\
+Bengaluru, India \\
+sjankatti@dayanandasagar.edu}
+}
+
+\maketitle
+
+\begin{abstract}
+This paper describes a data-centric machine listening pipeline that separates clean Indian bird vocalizations from background noise for binary bird-versus-noise classification on the iBC53 corpus (fifty Indian bird species). Raw field-style recordings are preprocessed to $48$\,kHz mono, split into three-second segments, subjected to RMS-based silence removal, and optionally routed by Noise Segregation~V2, a rule-based subframe scorer that aggregates zero-crossing rate, spectral flatness, spectral centroid statistics, and insect-band autocorrelation features over six $0.5$\,s windows with a majority vote. Processed segments are embedded with BirdNET~V2.4 by reading the $1024$-dimensional penultimate global pooling activation from the official TensorFlow Lite model, stored with a global manifest in HDF5. A compact multilayer perceptron head ($1024 \rightarrow 512 \rightarrow 256 \rightarrow 1$) is trained with focal loss and cosine annealing, with checkpointing driven by validation F1. An optional symmetric autoencoder trained on bird-only embeddings provides reconstruction-error gating at inference. At deployment, three-class probability routing sends high-confidence bird segments to \texttt{clean\_birds/}, low-confidence segments to \texttt{noise/}, and mid-band predictions to \texttt{uncertain/} for review, with an active-learning mining stage exporting false positives and false negatives. On $9{,}794$ held-out segments ($7{,}829$ bird, $1{,}965$ noise) reported in the project documentation, the pipeline improves accuracy from $0.499$ (BirdNET detection-confidence baseline at threshold $0.5$) to $0.922$, F1 from $0.628$ to $0.952$, and reduces false-positive and false-negative rates relative to that baseline. The implementation is available on GitHub on branch \texttt{fix-birdnet-baseline} of the repository \textit{Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification}.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Bioacoustics, bird sound classification, BirdNET, noise segregation, TensorFlow Lite embeddings, multilayer perceptron, focal loss, autoencoder gating, three-class routing, active learning, iBC53.
+\end{IEEEkeywords}
+
+\section{Introduction}
+Automated bird sound classification in Indian field conditions must cope with insect choruses, wind, anthropogenic noise, and variable recording quality. Systems that rely solely on off-the-shelf species detectors can mislabel noise-dominated segments as birds or miss faint calls, which degrades downstream species models and dataset curation. The present work documents an open-source pipeline that couples (i)~deterministic preprocessing and Noise Segregation~V2 routing, (ii)~BirdNET~V2.4 embedding extraction, (iii)~a learned binary head with imbalance-aware training, and (iv)~optional autoencoder-based out-of-distribution rejection, followed by calibrated three-way routing and mining hooks for human-in-the-loop refinement.
+
+The reference implementation targets the iBC53 dataset layout: fifty species folders under \texttt{iBC53/} plus generated or curated \texttt{noise/} material when the \texttt{full} pipeline mode is enabled. It exposes a six-stage command-line workflow---preprocess, embed, train, infer, evaluate, mine---driven by a central \texttt{config.yaml}. The BirdNET baseline comparison packaged with the repository thresholds maximum exported detection confidence per segment at $0.5$ against manifest-derived bird-versus-noise ground truth; the proposed system replaces that decision rule with the trained embedding classifier, optionally preceded by the autoencoder gate.
+
+\begin{figure*}[htbp]
+    \centering
+    \resizebox{\textwidth}{!}{%
+    \begin{tikzpicture}[node distance=0.28cm and 0.42cm]
+      \node[pipbox,fill=blue!8] (raw) {Raw audio\\[-1pt]\scriptsize\texttt{iBC53/} species};
+      \node[pipbox,right=of raw,fill=blue!8] (pp) {Preprocess\\[-1pt]\scriptsize 48\,kHz mono, 3\,s seg.};
+      \node[pipbox,right=of pp,fill=blue!8] (rms) {Silence drop\\[-1pt]\scriptsize RMS $<$\,thr.};
+      \node[pipbox,right=of rms,fill=orange!12] (v2) {Noise Seg.~V2\\[-1pt]\scriptsize $6\times0.5$\,s vote};
+      \node[pipsmall,below=0.55cm of v2,xshift=-1.6cm,fill=gray!15] (noisef) {\texttt{processed/noise/}};
+      \node[pipbox,right=of v2,fill=green!10] (wav) {WAV + JSON\\[-1pt]\scriptsize sidecars};
+      \node[pipbox,right=of wav,fill=green!10] (bn) {BirdNET\\[-1pt]\scriptsize TFLite V2.4};
+      \node[pipbox,right=of bn,fill=green!10] (emb) {$\mathbf{R}^{1024}$ emb.\\[-1pt]\scriptsize HDF5 + manifest};
+      \draw[arr] (raw) -- (pp);
+      \draw[arr] (pp) -- (rms);
+      \draw[arr] (rms) -- (v2);
+      \draw[arr] (v2) -- node[above,font=\scriptsize]{bird-like} (wav);
+      \draw[arr] (v2.south) -- ++(0,-0.12) -| node[pos=0.25,left,font=\scriptsize]{noise-like} (noisef.north);
+      \draw[arr] (wav) -- (bn);
+      \draw[arr] (bn) -- (emb);
+      \scoped[on background layer]
+        \node[draw,rounded corners=3pt,fill=blue!4,fit=(raw)(pp)(rms)(v2)(noisef)(wav)(bn)(emb),inner sep=5pt,yshift=0.06cm] {};
+      \node[pipbox,below=1.05cm of emb,xshift=-3.4cm,fill=purple!10] (ae) {AE gate (opt.)\\[-1pt]\scriptsize recon.\,error};
+      \node[pipbox,right=of ae,fill=purple!10] (mlp) {MLP head\\[-1pt]\scriptsize $1024\!\to\!512\!\to\!256\!\to\!1$};
+      \node[pipbox,right=of mlp,fill=yellow!12] (thr) {Three-class router\\[-1pt]\scriptsize $>$0.7\,/\,0.3--0.7\,/\,$<$0.3};
+      \node[pipsmall,below=0.5cm of thr,xshift=-0.95cm,fill=green!15] (cb) {\texttt{clean\_birds/}};
+      \node[pipsmall,below=0.5cm of thr,fill=yellow!15] (un) {\texttt{uncertain/}};
+      \node[pipsmall,below=0.5cm of thr,xshift=0.95cm,fill=red!12] (ns) {\texttt{noise/}};
+      \node[pipsmall,below=0.45cm of un,fill=magenta!10] (mine) {Mine FP/FN $\rightarrow$ active learning};
+      \draw[arrd] (emb.south) -- ++(0,-0.32) -| (ae.north);
+      \draw[arr] (ae) -- node[above,font=\scriptsize]{pass} (mlp);
+      \draw[arr] (mlp) -- (thr);
+      \draw[arrd] (ae.south) -- ++(0,-0.28) -| node[pos=0.35,below,font=\scriptsize]{reject} (ns.west);
+      \draw[arr] (thr.south west) -- ++(-0.12,-0.22) |- (cb.west);
+      \draw[arr] (thr.south) -- (un.north);
+      \draw[arr] (thr.south east) -- ++(0.12,-0.22) |- (ns.east);
+      \draw[arrd] (un) -- (mine);
+      \node[font=\scriptsize\itshape,anchor=east] at ($(raw.west)+(-0.12,0)$) {Upper path:};
+      \node[font=\scriptsize\itshape,anchor=east] at ($(ae.west)+(-0.12,0)$) {Inference:};
+    \end{tikzpicture}%
+    }
+    \caption{Conceptual architecture: upper path---resampling, segmentation, silence drop, and Noise Segregation~V2; lower path---BirdNET embedding, classifier, optional autoencoder rejection, and folder-based routing with mining exports.}
+    \label{fig:arch}
+\end{figure*}
+
+\section{Literature Survey}
+
+\subsection{Embedding-Based Bird Sound Recognition}
+Deep embedding models for avian vocalizations, notably BirdNET and related analyzers, map short audio clips to fixed-dimensional representations suitable for retrieval and classification~\cite{Kahl2021}. These systems emphasize scalable species recognition across large taxonomic label sets; they are not, by default, optimized for explicit bird-versus-noise corpus cleaning at the segment level in highly noisy Indian soundscapes.
+
+\subsection{Noise and Dataset Construction in Bioacoustic Pipelines}
+Field recording corpora mix target vocalizations with environmental noise. Workflows typically apply bandpass filtering, spectral denoising, or energy-based segment filtering before model training. The present pipeline follows this pattern through configurable spectral gating or bandpass noise reduction, RMS silence removal, and the additional V2 subframe vote, as implemented in \texttt{preprocessing/preprocessing.py} and \texttt{preprocessing/noise\_segregation\_v2.py}.
+
+\subsection{Rule-Based and Learned Hybrid Screening}
+Hand-crafted acoustic features remain effective for coarse scene or noise detection when paired with lightweight decision rules. The V2 stage combines normalized zero-crossing rate, spectral flatness, centroid stability, and band-limited autocorrelation peaks into a weighted noise score per subframe, then aggregates votes across subframes. Learned stages subsequently operate on BirdNET embeddings, yielding a hybrid rule-plus-MLP design reflected in the repository configuration (\texttt{pipeline.mode}: \texttt{baseline}, \texttt{filtered}, or \texttt{full}).
+
+\subsection{Large-Scale Deployments and Baselines}
+BirdNET-family models are widely deployed for citizen-science monitoring; repository tooling under \texttt{birdnet\_integration/} supports exporting analyzer outputs to JSONL and aligning them with fixed-length segments for baseline evaluation. The documented baseline uses normalized BirdNET detection rows (\texttt{comparison/baseline\_normalized.jsonl}) thresholded at $0.5$, whereas the proposed method uses the trained classifier probabilities (and optional autoencoder rejection) on the same manifest-indexed segments.
+
+\subsection{Gap in Existing Research}
+While species embedding models and generic denoising front-ends are established, the reference work concentrates on a reproducible, configuration-driven Indian-bird corpus workflow that (i)~unifies V2 noise segregation modes with BirdNET TFLite embedding extraction into HDF5, (ii)~trains a small MLP with focal loss and F1-based model selection, (iii)~adds reconstruction-error gating, and (iv)~standardizes three-class folder routing plus automated hard-example mining for iterative retraining. This combination is documented as an integrated open-source pipeline rather than as a standalone species classifier.
+
+\section{System Architecture}
+
+\subsection{Recording-Based Processing Pipeline (Upper Path of Fig.~\ref{fig:arch})}
+
+\subsubsection{Raw Audio Ingest}
+Input follows the iBC53 convention: one subdirectory per species containing \texttt{.wav} recordings, with optional \texttt{noise/} clips depending on mode. Inference and full-pipeline runs recurse through \texttt{.wav}, \texttt{.mp3}, \texttt{.flac}, and \texttt{.ogg} when scanning the configured raw directory.
+
+\subsubsection{Preprocess and Noise Segregation~V2}
+The preprocessor resamples to $48$\,kHz mono, forms $3$\,s segments with configurable overlap (default none), optionally applies spectral gating or bandpass noise reduction, drops low-RMS silent segments, and, when enabled, instantiates Noise Segregation~V2. Each segment is divided into six $0.5$\,s subframes. Per subframe the implementation computes RMS in dB, zero-crossing rate, spectral flatness, spectral centroid mean and standard deviation (Hz), and an insect-band autocorrelation peak in $[200,2000]$\,Hz against a $0.35$ threshold. A weighted score
+\[
+S = w_{\mathrm{zcr}}\,\hat{\mathrm{ZCR}} + w_{\mathrm{flat}}\,\hat{\mathrm{Flat}} + w_{\mathrm{cflag}}\,\mathrm{CFlag} + w_{\mathrm{cstd}}\,\hat{\sigma}_c + w_{\mathrm{ins}}\,\hat{\mathrm{AC}},
+\]
+with configurable weights (defaults $0.25$, $0.30$, $0.15$, $0.15$, $0.15$) and normalized feature terms, triggers a noise vote when $S \ge \texttt{vote\_threshold}$ (config default $0.3$). The segment label follows a majority vote across subframes, with a tie-break policy (\texttt{majority\_tie}: \texttt{bird} or \texttt{noise}). In \texttt{full} mode, noise-labeled segments are written under \texttt{data/processed/noise/} with filenames encoding the originating species and source index.
+
+\begin{figure*}[ht]
+    \centering
+    \begin{tikzpicture}
+      \begin{axis}[
+        width=0.88\textwidth,height=4.6cm,
+        ybar stacked,
+        bar width=22pt,
+        xmin=0.5,xmax=1.5,
+        xtick={1},
+        xticklabels={Segment counts (documented totals)},
+        ymin=0, ymax=11000,
+        ylabel={Count},
+        legend style={at={(0.5,1.02)},anchor=south,legend columns=4,font=\footnotesize},
+        tick label style={font=\footnotesize},
+        enlarge x limits=0.35,
+      ]
+        \addplot+[fill=green!50!black,draw=black] coordinates {(1,7829)};
+        \addlegendentry{Bird ($7{,}829$)}
+        \addplot+[fill=red!55!black,draw=black] coordinates {(1,1965)};
+        \addlegendentry{Noise ($1{,}965$)}
+      \end{axis}
+    \end{tikzpicture}\\[0.35em]
+    {\footnotesize Total $9{,}794$ segments after preprocessing (README).}
+    \caption{Documented class composition of embedded segments (bird vs.\ noise) for the iBC53-derived evaluation corpus.}
+    \label{fig:classdist}
+\end{figure*}
+
+\subsubsection{BirdNET Embedding Stage}
+The embedding module requires BirdNET~V2.4 TFLite weights (\texttt{BirdNET\_GLOBAL\_6K\_V2.4\_Model\_FP32.tflite}). Intermediate tensors are accessed with XNNPACK delegates disabled so the penultimate global average pooling layer yields $1024$-dimensional vectors per segment. Embeddings and filenames are stored per species in HDF5 with a consolidated \texttt{manifest.csv} listing paths, labels, and metadata for training and evaluation.
+
+\begin{figure}[htpb]
+    \centering
+    \begin{tikzpicture}[x=0.22cm,y=0.22cm,font=\scriptsize]
+      \foreach \y in {0,...,7} {
+        \foreach \x in {0,...,24} {
+          \pgfmathtruncatemacro{\c}{25 + mod(\x*13+\y*17,55)}
+          \fill[blue!\c!black] (\x,\y) rectangle ++(0.92,0.92);
+        }
+      }
+      \draw[thick] (0,0) rectangle (25,8);
+      \node[anchor=west,font=\footnotesize] at (0,-1.2) {Mel-like map (schematic)};
+      \draw[arr] (26,4) -- node[above,font=\footnotesize]{BirdNET} (31,4);
+      \fill[orange!75!black] (32,0) rectangle (33.2,4);
+      \foreach \i in {1,...,20} {
+        \draw[white,opacity=0.35] (32,0.2*\i) -- (33.2,0.2*\i);
+      }
+      \draw[thick] (32,0) rectangle (33.2,4);
+      \node[align=left,anchor=west,font=\footnotesize] at (33.5,2) {$\mathbf{R}^{1024}$\\[-1pt]\scriptsize pool vector};
+    \end{tikzpicture}
+    \caption{Schematic view: fixed-length segment $\rightarrow$ learned representation; BirdNET reads the penultimate pooled $1024$-D vector per segment (not to scale).}
+    \label{fig:seqhist}
+\end{figure}
+
+\subsubsection{Classifier Head and Loss}
+The binary head (\texttt{models/classifier.py}) stacks two hidden blocks: linear $\rightarrow$ batch normalization $\rightarrow$ ReLU $\rightarrow$ dropout ($0.3$) for $512$ then $256$ units, followed by a single logit. Training uses Adam with cosine annealing, early stopping (patience $7$), and focal loss with $\gamma=2.0$ as documented~\cite{Lin2017}, reflecting approximately $80\%$ bird and $20\%$ noise segments in the reported split. The best checkpoint is selected by validation F1, not raw loss.
+
+\subsubsection{Inference Outputs and Mining Hooks}
+The predictor (\texttt{inference/predictor.py}) writes routed WAV copies and JSON sidecars into \texttt{outputs/clean\_birds/}, \texttt{outputs/noise/}, and \texttt{outputs/uncertain/} using high and low probability cuts ($0.7$ and $0.3$ defaults) around the F1-optimal operating threshold loaded from \texttt{checkpoints/best\_model\_meta.json} when \texttt{confidence\_threshold} is \texttt{auto}. The mining stage scans routed folders to surface false positives and false negatives into \texttt{outputs/false\_positives/} and \texttt{outputs/false\_negatives/} for relabeling and dataset updates.
+
+\subsection{Post-Embedding Review and Active-Learning Path (Lower Path of Fig.~\ref{fig:arch})}
+
+\begin{enumerate}
+    \item \textbf{Segment manifest and labels:} The global CSV produced during embedding assigns bird labels from species folders and noise labels for routed noise clips; filenames for noise segments preserve the originating species token for baseline alignment, as described in \texttt{README.md}.
+    \item \textbf{Train--validate--test protocol:} Stratified splits with seed $42$ allocate $75\%$ train, $15\%$ validation, and $10\%$ test while preserving class balance assumptions used for weighting and evaluation.
+    \item \textbf{Autoencoder training and thresholding:} When enabled, a symmetric autoencoder (\texttt{models/autoencoder.py}) with bottleneck width $128$ is trained on bird-only embeddings~\cite{Hinton2006}; reconstruction error percentiles set the gate (configuration supports \texttt{auto} for the $95$th percentile behavior described in the documentation).
+    \item \textbf{Three-class routing:} After optional gating, softmax or sigmoid probabilities drive folder destinations for high-confidence bird, high-confidence noise, and an uncertain band intended for manual review.
+    \item \textbf{Mining and refresh:} Hard-negative and false-positive mining exports support an active-learning loop: reviewers promote verified birds, update the dataset module, and retrain without altering the BirdNET backbone.
+    \item \textbf{Evaluation artifacts:} Standalone scripts emit confusion matrices, metric JSON, threshold sweeps, and comparison plots against the BirdNET confidence baseline (\texttt{evaluate.py}, \texttt{evaluate\_visual.py}, \texttt{compute\_baseline\_metrics.py}).
+\end{enumerate}
+
+\subsection{Unified Artifact and Evaluation Layer}
+Both training and inference share:
+\begin{itemize}
+    \item HDF5 embedding stores and a single manifest for reproducible splits,
+    \item YAML-driven hyperparameters for audio, V2, embedding, model, training, inference, and autoencoder blocks,
+    \item checkpoint metadata capturing label maps, optimal thresholds, and reconstruction cutoffs,
+    \item results figures under \texttt{results/} and comparison tables under \texttt{comparison/}.
+\end{itemize}
+The design keeps the BirdNET encoder frozen while adapting decision boundaries to the Indian noise conditions present in iBC53-derived splits.
+
+\section{Proposed Methodology}
+
+The end-to-end methodology implemented in \texttt{run\_pipeline.py} comprises four conceptual stages aligned with the repository stages:
+
+\begin{enumerate}
+    \item \textbf{Deterministic preprocessing:} Resampling, optional denoising, silence gating, segmentation, and optional V2 routing per \texttt{pipeline.mode}.
+    \item \textbf{Representation learning via BirdNET:} Fixed $1024$-dimensional embeddings extracted with the official TFLite graph.
+    \item \textbf{Discriminative training:} MLP optimization with focal loss, batch normalization, dropout, and F1-based checkpointing; parallel autoencoder fitting on bird embeddings when enabled.
+    \item \textbf{Calibrated deployment:} Autoencoder rejection (optional), sigmoid thresholding with three-band routing, and mining-assisted dataset refinement.
+\end{enumerate}
+
+\subsection{BirdNET Embedding Extraction}
+Let $x \in \mathbb{R}^{T}$ denote a mono waveform resampled to $48$\,kHz and trimmed or padded to three seconds. The BirdNET TFLite interpreter runs the production graph and reads the penultimate pooling tensor, producing $e \in \mathbb{R}^{1024}$ stored alongside the relative filepath and integer label in HDF5. The code enforces model version~V2.4 and explicit weight discovery to avoid silent fallbacks, raising \texttt{BirdNETModelNotFoundError} when files are absent.
+
+\subsection{Noise Segregation, Classifier Optimization, and Gating}
+
+\subsubsection{RMS Silence Removal}
+Segments whose RMS falls below \texttt{rms\_threshold\_db} (default $-40$\,dB) are discarded before embedding, reducing empty tail segments.
+
+\subsubsection{V2 Majority Vote}
+For each segment, subframe scores yield binary votes; the segment inherits the majority label. Configuration exposes per-feature reference scales (e.g., \texttt{zcr\_ref}$=0.3$, \texttt{flatness\_ref}$=1.0$, \texttt{centroid\_std\_ref}$=2500$) and centroid band heuristics (\texttt{centroid\_low\_hz}$=400$, \texttt{centroid\_high\_hz}$=7000$).
+
+\subsubsection{Temporal Resampling of Decisions}
+Because each embedding corresponds to a single $3$\,s window, temporal smoothing modules in \texttt{inference/postprocessing.py} are present but experimental and not central to the documented evaluation path.
+
+\subsubsection{Classifier Objective}
+Binary focal loss with $\gamma=2.0$ down-weights easy examples; class imbalance is also addressed via weighted sampling in the dataset loader when configured.
+
+\subsubsection{Autoencoder Reconstruction Gate}
+Let $e$ be an embedding. The autoencoder computes reconstruction $\hat{e}$; the squared error $\lVert e-\hat{e}\rVert_2^2$ is compared to a threshold learned from bird-only validation statistics. Segments above the threshold bypass the classifier and route directly to \texttt{noise/}, implementing a simple out-of-distribution screen consistent with the training distribution assumption.
+
+\subsubsection{Threshold Search}
+After training, a fifty-point sweep on validation scores determines the F1-optimal probability threshold, persisted for automatic inference.
+
+\section{Experimental Setup}
+
+\subsection{Dataset Preparation}
+
+\subsubsection{Corpus Layout}
+Experiments use iBC53: fifty Indian bird species drawn from the Indian Bird Call corpus as described in the project documentation, organized as species-named folders containing source recordings. Noise segments arise from curated clips or from V2-routed material in \texttt{full} mode, yielding $1{,}965$ noise segments paired with $7{,}829$ bird segments across $9{,}794$ total items after preprocessing.
+
+\subsubsection{Segment Construction and Labeling}
+Each kept segment is a $48$\,kHz mono WAV of three seconds. Labels for training derive from folder membership (species $\rightarrow$ bird) or explicit noise routing. The manifest records paths for stratified splitting and for aligning BirdNET baseline JSONL keys, including parsing of noise filenames that embed the originating species token.
+
+\subsection{Preprocessing and Embedding Configuration}
+
+\subsubsection{Preprocessing Pipeline}
+The documented order is segment formation, RMS silence drop, optional V2 scoring (depending on \texttt{pipeline.mode}), and WAV~+~JSON export with optional \texttt{segments\_manifest.csv}. Noise reduction defaults to spectral gating with \texttt{n\_std\_thresh}$=1.5$ and \texttt{prop\_decrease}$=1.0$.
+
+\subsubsection{Classifier and Autoencoder Training Setup}
+The MLP uses hidden widths $[512,256]$, dropout $0.3$, and about $657{,}921$ trainable parameters. Training runs up to fifty epochs with early stopping; the autoencoder, when trained, uses thirty epochs with learning rate $0.001$ and batch size $64$ as listed in \texttt{config.yaml}. Dataset augmentation options include small time shifts, noise injection SNR ranges $[5,15]$\,dB, and frequency masking when enabled.
+
+\subsubsection{Computational Environment}
+The documentation reports successful runs on consumer CPUs without requiring a discrete GPU; BirdNET inference uses TFLite with delegates disabled for tensor introspection. Audio I/O relies on \texttt{soundfile} for cross-platform decoding without an FFmpeg dependency.
+
+\subsection{Quantitative Visualization and Validation}
+
+\subsubsection{Aggregate Metrics and Confusion Matrix Export}
+\texttt{evaluate.py} writes \texttt{results/metrics.json} with accuracy, precision, recall, F1 at threshold $0.5$ and at the F1-optimal threshold, false-positive rate on noise, threshold curves, recall-at-minimum-precision summaries, probability histograms, and autoencoder error statistics when applicable.
+
+\begin{figure}[htpb]
+    \centering
+    \begin{tikzpicture}[scale=1.05, every node/.style={font=\footnotesize}]
+      \def\w{2.6}\def\h{1.35}
+      \draw[thick] (0,0) rectangle (\w,\h);
+      \draw[thick] (\w/2,0) -- (\w/2,\h);
+      \draw[thick] (0,\h/2) -- (\w,\h/2);
+      \node[anchor=east] at (-0.15,\h*0.75) {True bird};
+      \node[anchor=east] at (-0.15,\h*0.25) {True noise};
+      \node[anchor=south] at (\w*0.25,-0.12) {Pred.\ bird};
+      \node[anchor=south] at (\w*0.75,-0.12) {Pred.\ noise};
+      \node[align=center] at (\w*0.25,\h*0.75) {TP};
+      \node[align=center] at (\w*0.75,\h*0.75) {FN};
+      \node[align=center] at (\w*0.25,\h*0.25) {FP};
+      \node[align=center] at (\w*0.75,\h*0.25) {TN};
+      \node[align=center,font=\scriptsize] at (\w/2,\h+0.55) {Binary bird vs.\ noise (structure produced by \texttt{evaluate\_visual.py})};
+    \end{tikzpicture}
+    \caption{Layout of the bird-vs.-noise confusion matrix: rows are ground truth, columns are predictions at a chosen probability threshold.}
+    \label{fig:skeletonVis}
+\end{figure}
+
+\subsubsection{Baseline and Pipeline Comparison Plots}
+\texttt{compute\_baseline\_metrics.py} regenerates BirdNET baseline metrics and pipeline metrics, producing side-by-side JSON and PNG summaries under \texttt{comparison/} and \texttt{results/comparison\_graphs/}.
+
+\subsection{Ground Truth, Baseline Alignment, and Mining}
+
+\subsubsection{Manifest Index and Class Definitions}
+Ground-truth bird labels correspond to species-derived segments; noise labels correspond to dedicated noise clips or V2-routed segments. The manifest encodes this binary distinction for training the bird-versus-noise head.
+
+\subsubsection{BirdNET Baseline Score Alignment}
+Baseline predictions map each manifest row to the maximum BirdNET detection confidence in \texttt{comparison/baseline\_normalized.jsonl}, defaulting to zero when no detection exists, then apply a $0.5$ threshold for binary evaluation against the manifest labels.
+
+\begin{figure}[htpb]
+    \centering
+    \resizebox{\linewidth}{!}{%
+    \begin{tikzpicture}[x=6.2cm,y=0.95cm,font=\footnotesize]
+      \fill[red!20] (0,0) rectangle (0.3,0.5);
+      \fill[yellow!35] (0.3,0) rectangle (0.7,0.5);
+      \fill[green!25] (0.7,0) rectangle (1,0.5);
+      \draw[thick] (0,0) rectangle (1,0.5);
+      \draw (0.3,0) -- (0.3,0.5);
+      \draw (0.7,0) -- (0.7,0.5);
+      \foreach \x/\t in {0/0,0.3/0.3,0.5/0.5,0.7/0.7,1/1} {
+        \draw (\x,0) -- (\x,-0.07);
+        \node[below] at (\x,-0.07) {\t};
+      }
+      \node[anchor=west] at (0,0.68) {Classifier probability (schematic)};
+      \node[font=\scriptsize] at (0.15,0.25) {\texttt{noise/}};
+      \node[font=\scriptsize] at (0.5,0.25) {\texttt{uncertain/}};
+      \node[font=\scriptsize] at (0.85,0.25) {\texttt{clean\_birds/}};
+      \draw[Latex-] (0.3,-0.38) -- (0.3,-0.12) node[pos=0.5,right,font=\scriptsize]{\texttt{low\_threshold}=0.3};
+      \draw[Latex-] (0.7,-0.38) -- (0.7,-0.12) node[pos=0.5,right,font=\scriptsize]{\texttt{high\_threshold}=0.7};
+    \end{tikzpicture}%
+    }
+    \caption{Three-band routing on classifier probability: $p<0.3$ to \texttt{noise/}, $0.3\le p\le 0.7$ to \texttt{uncertain/}, $p>0.7$ to \texttt{clean\_birds/} (defaults in \texttt{config.yaml}). Training also stores an F1-optimal threshold in checkpoint metadata for the binary decision during evaluation.}
+    \label{fig:textToGloss}
+\end{figure}
+
+\subsubsection{Mining Exports}
+The mining stage automates extraction of suspected false positives and false negatives into dedicated output folders to accelerate manual cleaning before dataset updates.
+
+\begin{figure}[htpb]
+    \centering
+    \begin{tikzpicture}
+      \begin{axis}[
+        width=\linewidth,height=4.2cm,
+        ybar,
+        bar width=10pt,
+        ymin=0, ymax=0.75,
+        ylabel={Rate},
+        symbolic x coords={FPR,FNR},
+        xtick=data,
+        enlarge x limits=0.22,
+        legend style={font=\footnotesize,at={(0.5,1.12)},anchor=south,legend columns=2},
+        tick label style={font=\footnotesize},
+        yticklabel style={/pgf/number format/fixed,/pgf/number format/precision=2},
+      ]
+        \addplot+[fill=gray!55,draw=black] coordinates {(FPR,0.619) (FNR,0.471)};
+        \addlegendentry{BirdNET baseline}
+        \addplot+[fill=blue!45,draw=black] coordinates {(FPR,0.218) (FNR,0.042)};
+        \addlegendentry{Noise-aware pipeline}
+      \end{axis}
+    \end{tikzpicture}
+    \caption{Documented false-positive (noise$\rightarrow$bird) and false-negative (bird missed) rates: BirdNET confidence baseline vs.\ pipeline (README).}
+    \label{fig:fingerspelling}
+\end{figure}
+
+\subsection{Evaluation Environment}
+Reported browser-facing checks are less central than the Python~3 toolchain; evaluation scripts were designed for reproducible offline execution on a laptop-class CPU with Chrome~120-or-newer optionally used for ancillary visualization. Primary metrics rely on PyTorch for the MLP and TFLite for BirdNET embeddings.
+
+\section{Results and Discussion}
+
+This section summarizes metrics documented in the repository README for the iBC53-derived evaluation table; Fig.~\ref{fig:metricscompare} encodes those published values directly in vector form.
+
+\begin{table*}[ht]
+\centering
+\caption{Documented BirdNET Baseline versus Noise-Aware Pipeline (iBC53, $9{,}794$ segments)}
+\renewcommand{\arraystretch}{1.2}
+\resizebox{\linewidth}{!}{
+\begin{tabular}{|l|c|c|c|}
+\hline
+\textbf{Metric} & \textbf{BirdNET Baseline} & \textbf{Noise-Aware Pipeline} & \textbf{Change} \\
+\hline
+Accuracy & $0.499$ & $0.922$ & $+0.423$ \\
+\hline
+Precision & $0.773$ & $0.946$ & $+0.173$ \\
+\hline
+Recall & $0.529$ & $0.958$ & $+0.429$ \\
+\hline
+F1 Score & $0.628$ & $0.952$ & $+0.324$ \\
+\hline
+FPR (noise misclassified as bird) & $0.619$ & $0.218$ & $-0.401$ \\
+\hline
+FNR (bird missed) & $0.471$ & $0.042$ & $-0.429$ \\
+\hline
+\end{tabular}}
+\end{table*}
+
+\begin{figure*}[ht]
+    \centering
+    \begin{tikzpicture}
+      \begin{axis}[
+        width=0.42\textwidth,height=4.8cm,
+        ybar,
+        bar width=9pt,
+        ymin=0, ymax=1.05,
+        ylabel={Score},
+        symbolic x coords={Acc,Prec,Rec,F1},
+        xtick=data,
+        xticklabels={Acc.,Prec.,Rec.,F1},
+        x tick label style={font=\footnotesize,rotate=0},
+        enlarge x limits=0.18,
+        legend style={font=\footnotesize,at={(0.5,1.1)},anchor=south,legend columns=2},
+        yticklabel style={font=\footnotesize,/pgf/number format/fixed,/pgf/number format/precision=2},
+      ]
+        \addplot+[fill=gray!55,draw=black] coordinates {(Acc,0.499) (Prec,0.773) (Rec,0.529) (F1,0.628)};
+        \addlegendentry{BirdNET baseline}
+        \addplot+[fill=blue!45,draw=black] coordinates {(Acc,0.922) (Prec,0.946) (Rec,0.958) (F1,0.952)};
+        \addlegendentry{Pipeline}
+      \end{axis}
+    \end{tikzpicture}\hfill
+    \begin{tikzpicture}
+      \begin{axis}[
+        width=0.42\textwidth,height=4.8cm,
+        ybar,
+        bar width=10pt,
+        ymin=0, ymax=0.75,
+        ylabel={Rate},
+        symbolic x coords={FPR,FNR},
+        xtick=data,
+        enlarge x limits=0.22,
+        legend style={font=\footnotesize,at={(0.5,1.1)},anchor=south,legend columns=2},
+        tick label style={font=\footnotesize},
+        yticklabel style={/pgf/number format/fixed,/pgf/number format/precision=2},
+      ]
+        \addplot+[fill=gray!55,draw=black] coordinates {(FPR,0.619) (FNR,0.471)};
+        \addlegendentry{BirdNET baseline}
+        \addplot+[fill=blue!45,draw=black] coordinates {(FPR,0.218) (FNR,0.042)};
+        \addlegendentry{Pipeline}
+      \end{axis}
+    \end{tikzpicture}
+    \caption{Documented metrics from the README: accuracy-related scores (left) and error rates (right).}
+    \label{fig:metricscompare}
+\end{figure*}
+
+\subsection{Evaluation Methodology}
+Metrics follow standard binary classification definitions on bird-positive versus noise-negative labels. The BirdNET baseline uses exported analyzer confidences aligned to each three-second segment, while the pipeline uses classifier probabilities (and optional autoencoder rejection) on BirdNET embeddings of the same segments. Improvements therefore isolate the contribution of preprocessing, learned decision boundaries, and gating rather than a change in taxonomic backbone capacity.
+
+\subsection{Qualitative Assessment of Errors}
+The README highlights large baseline false-positive and false-negative rates relative to the pipeline, consistent with using raw detector confidences as a surrogate for segment cleanliness. The three-class routing and mining utilities are intended to concentrate residual errors into \texttt{uncertain/} and dedicated mining folders for inspection.
+
+\subsection{Dataset and Split Integrity}
+Documented splits allocate $75\%$/$15\%$/$10\%$ for train, validation, and test with stratification. The test fold lists $980$ segments ($783$ bird, $197$ noise). Users extending the corpus can rerun preprocessing and embedding without modifying BirdNET weights, preserving the modular boundary between representation and decision layers.
+
+\subsection{Routing and Artifact Evaluation}
+Outputs segregate high-confidence predictions for downstream species modeling, high-confidence noise for negative mining, and uncertain segments for manual QC. JSON sidecars per segment document probabilities, thresholds, and autoencoder diagnostics when enabled, supporting audit trails required in biodiversity monitoring workflows.
+
+\subsection{Discussion}
+The reported gains indicate that a lightweight head atop frozen BirdNET embeddings, combined with explicit noise-screening rules and optional reconstruction gating, can sharply reduce confusion between bird calls and environmental noise on this Indian corpus. The implementation prioritizes transparency (YAML configuration, manifest indexing, scripted baselines) over end-to-end fine-tuning of the embedding backbone.
+
+\subsection{Limitations and Future Work}
+The pipeline performs binary bird-versus-noise separation; species discrimination within the bird class is not the focus of the documented metrics. V2 weights and subframe thresholds are hand engineered and may require retuning for new geographies or microphones. Future extensions could incorporate learnable noise models, temporal smoothing across segments, or joint training with species classifiers while preserving the reproducible artifact layout.
+
+\section{Conclusion}
+This paper codifies a noise-aware, BirdNET-embedding-driven workflow for Indian bird sound segments that unifies preprocessing, Noise Segregation~V2, HDF5 embedding storage, focal-loss MLP training, optional autoencoder gating, three-way routing, and active-learning exports. Documented experiments on iBC53 show large accuracy and F1 gains over a BirdNET confidence threshold baseline, with substantial reductions in false positives and false negatives. The open-source implementation on GitHub branch \texttt{fix-birdnet-baseline} furnishes scripts to regenerate metrics, plots, and baseline comparisons from the same configuration files, supporting further study on Indian avian soundscapes.
+
+\begin{thebibliography}{99}
+
+\bibitem{Kahl2021}
+S. Kahl, C. M. Wood, M. Eibl, and H. Klinck, ``BirdNET: A deep learning solution for avian diversity monitoring,'' \textit{Ecological Informatics}, vol.~61, 2021, Art. no.~101236.
+
+\bibitem{Lin2017}
+T.-Y. Lin, P. Goyal, R. Girshick, K. He, and P. Doll\'ar, ``Focal loss for dense object detection,'' in \textit{Proc. IEEE ICCV}, 2017.
+
+\bibitem{Hinton2006}
+G. E. Hinton and R. R. Salakhutdinov, ``Reducing the dimensionality of data with neural networks,'' \textit{Science}, vol.~313, no.~5786, pp.~504--507, 2006.
+
+\end{thebibliography}
+
+\end{document}

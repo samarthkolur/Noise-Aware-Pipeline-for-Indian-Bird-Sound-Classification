@@ -1,0 +1,178 @@
+# ============================================================
+#  Bioacoustic Pipeline — Central Configuration
+# ============================================================
+
+project:
+  name: bioacoustic_pipeline
+  seed: 42
+  device: auto          # auto | cpu | cuda
+
+# ── Data ─────────────────────────────────────────────────────
+data:
+  raw_dir: ./iBC53
+  processed_dir: ./data/processed
+  embeddings_dir: ./data/embeddings
+  output_dir: ./outputs
+
+# ── Audio / Preprocessing ───────────────────────────────────
+audio:
+  sample_rate: 48000
+  segment_duration_s: 3.0
+  overlap: 0.0          # 0.0 = non-overlapping (preprocessing default)
+  mono: true
+
+# ── Feature Extraction ──────────────────────────────────────
+features:
+  type: mel_spectrogram   # mel_spectrogram | mfcc
+  n_fft: 2048
+  hop_length: 512
+  n_mels: 128
+  f_min: 150
+  f_max: 15000
+
+# ── Noise Reduction ────────────────────────────────────────
+noise_reduction:
+  enabled: true
+  method: spectral_gating  # spectral_gating | bandpass
+  spectral_gating:
+    n_std_thresh: 1.5
+    prop_decrease: 1.0
+  bandpass:
+    low_freq: 150
+    high_freq: 15000
+
+# ── Silence Removal (RMS-based) ────────────────────────────
+# More negative = keep quieter segments (weak bird calls). Less aggressive than -40 dB.
+silence_removal:
+  enabled: true
+  rms_threshold_db: -40.0   # report architecture default: discard segments below -40 dB
+
+# ── Pipeline mode (Noise Segregation V2 + routing) ─────────
+# Order: segment → silence drop → V2 score (filtered/full) → save WAVs
+#   baseline  — no filtering (optional manual raw noise/ only)
+#   filtered  — keep only bird (drop V2 noise-like segments)
+#   full      — generate bird + noise (route V2 noise-like segments to processed_dir/noise/)
+pipeline:
+  mode: full                  # use full (not filtered) so noise segments are kept, not dropped
+  write_segments_manifest: true   # processed_dir/segments_manifest.csv
+
+# When V2 says "noise", optionally run trained binary MLP on BirdNET embeddings; if
+# P(bird) >= threshold, route to species/ instead of noise/ (and keep in filtered mode).
+# Requires best_model.pt + best_model_meta.json under training.checkpoint_dir. If
+# missing or BirdNET not found, falls back to V2-only. threshold: auto = optimal from val.
+bird_rescue:
+  enabled: true
+  threshold: auto
+  # checkpoint_dir: null      # null = use training.checkpoint_dir; or set a path
+
+noise_segregation:
+  v2:
+    subframe_duration_s: 0.5
+    vote_threshold: 0.3      # subframe votes noise if S >= this (lower → more noise votes)
+    majority_tie: bird       # bird | noise (when 3-3 vote)
+    target_rms_db: -20.0
+    w_zcr: 0.25
+    w_flat: 0.30
+    w_centroid_flag: 0.15
+    w_centroid_std: 0.15
+    w_insect: 0.15
+    zcr_ref: 0.30
+    flatness_ref: 1.0
+    centroid_std_ref: 2500.0
+    centroid_low_hz: 400.0
+    centroid_high_hz: 7000.0
+    insect_lag_min_hz: 200.0
+    insect_lag_max_hz: 2000.0
+    insect_peak_thresh: 0.35
+
+# ── Embedding Model ────────────────────────────────────────
+# BirdNET V2.4 only — file must be named:
+#   BirdNET_GLOBAL_6K_V2.4_Model_FP32.tflite
+# Get it: pip install birdnetlib  OR  download BirdNET-Analyzer-V2.4.zip from
+#   https://birdnet-team.github.io/BirdNET-Analyzer/models.html
+# Place manually under: birdnet_weights/BirdNET_GLOBAL_6K_V2.4_Model_FP32.tflite
+# (Do not use the Python package folder "models/" — that is the MLP code.)
+embedding:
+  model_name: birdnet
+  embedding_dim: 1024          # 1024 (BirdNET V2.4 penultimate layer)
+  birdnet_model_path: auto     # auto = birdnet_weights/ first, else birdnetlib bundle; or set path to .tflite
+  batch_size: 64
+  num_workers: 4
+  storage_format: hdf5        # hdf5 (per-species .h5 + manifest.csv)
+
+# ── Dataset & DataLoader ───────────────────────────────────
+dataset:
+  val_split: 0.15
+  test_split: 0.10
+  stratify: true
+  augmentation:
+    enabled: true
+    time_shift_ms: 100
+    noise_snr_db: [5, 15]
+    frequency_mask: 10
+
+# ── Model Architecture ─────────────────────────────────────
+model:
+  type: classifier         # classifier
+  binary: true             # true (BCE) or false (CrossEntropy)
+  num_classes: 53          # ignored if binary=true
+  hidden_dims: [512, 256]
+  dropout: 0.3
+
+# ── Autoencoder (mandatory OOD rejection before MLP) ─────────
+# Trained on bird-only embeddings (label=1); τ_AE from val bird error percentile.
+autoencoder:
+  latent_dim: 128
+  threshold_percentile: 95   # τ_AE = this percentile of val bird reconstruction MSE
+  epochs: 30
+  learning_rate: 0.001
+  batch_size: 64
+  checkpoint_path: ./checkpoints/autoencoder.pt
+
+# ── Training ───────────────────────────────────────────────
+training:
+  epochs: 50
+  batch_size: 32
+  num_workers: 4            # DataLoader workers (classifier training)
+  # Class imbalance: use EITHER loss reweighting (default) OR this sampler — not both.
+  use_weighted_sampler: false
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  scheduler: cosine        # cosine | step | plateau
+  early_stopping:
+    enabled: true
+    patience: 7
+    min_delta: 0.001
+  loss: focal              # cross_entropy | focal | label_smoothing
+  focal_loss:
+    gamma: 2.0
+    alpha: null
+  label_smoothing: 0.1
+  checkpoint_dir: ./checkpoints
+  log_dir: ./logs
+
+# ── Inference ──────────────────────────────────────────────
+inference:
+  checkpoint: ./checkpoints/best_model.pt
+  confidence_threshold: auto    # 'auto' = use optimal from training, or float (e.g. 0.5)
+  high_threshold: 0.7           # report architecture: confident bird
+  low_threshold: 0.3            # report architecture: confident noise
+  # between low and high → uncertain (routed to outputs/uncertain/); evaluate.py counts uncertain as bird
+  top_k: 3
+  temporal_smoothing:
+    enabled: true
+    window_size: 5
+
+# ── Mining / Active Learning ──────────────────────────────
+mining:
+  hard_negatives:
+    enabled: true
+    k_neighbours: 10
+    distance_metric: cosine
+  active_learning:
+    strategy: uncertainty     # uncertainty | margin | entropy
+    query_budget: 100
+
+# ── Evaluation (evaluate.py) ────────────────────────────────
+evaluation:
+  results_dir: ./results      # metrics.json and optional plots
