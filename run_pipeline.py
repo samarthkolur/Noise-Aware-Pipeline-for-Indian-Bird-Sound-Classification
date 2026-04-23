@@ -3,17 +3,22 @@ Master Pipeline Orchestrator
 
 Runs the complete ETL + evaluation pipeline end-to-end:
 
-  Step 1  EXTRACT   -- verify / unzip IBC53 dataset
-  Step 2  TRANSFORM -- preprocess audio into data/processed/
-  Step 3  LOAD      -- build splits/train.csv and splits/val.csv
-  Step 4  BASELINE  -- run BirdNET on raw IBC53 files
-  Step 5  PROCESSED -- run BirdNET on preprocessed segments
-  Step 6  METRICS   -- compute metrics and comparison
+  Step 1  EXTRACT    -- verify / unzip IBC53 dataset
+  Step 2  TRANSFORM  -- preprocess audio into data/processed/
+  Step 3  LOAD       -- build splits/train.csv and splits/val.csv
+  Step 4  BASELINE   -- run BirdNET on raw IBC53 files
+  Step 5  PROCESSED  -- run BirdNET on preprocessed segments
+  Step 6  METRICS    -- compute metrics and comparison
+  Step 7  EMBEDDINGS -- extract BirdNET 1024-D embeddings (train + val)
+  Step 8  TRAIN_ML   -- train MLP classifier + autoencoder + temperature scaling
+  Step 9  INFER      -- three-stage inference on val set -> mlp_predictions.json
+  Step 10 BENCHMARK  -- four-model benchmark + embedding visualisation
 
 Usage:
     python run_pipeline.py               # run all steps
     python run_pipeline.py --from 4      # resume from step 4
     python run_pipeline.py --only 6      # run step 6 only
+    python run_pipeline.py --from 7      # new ML components only
 """
 
 import argparse
@@ -118,13 +123,51 @@ def step6_metrics():
     evaluate_all()
 
 
+def step7_embeddings():
+    _banner(7, "EMBEDDINGS -- Extract BirdNET 1024-D embeddings")
+    from models.extract_embeddings import extract_embeddings
+    extract_embeddings(["splits/train.csv", "splits/val.csv"])
+
+
+def step8_train_ml():
+    _banner(8, "TRAIN_ML -- Train MLP + AE + temperature scaling")
+    from models.mlp_classifier    import train as train_mlp
+    from models.autoencoder       import train as train_ae
+    from models.temperature_scaling import calibrate
+
+    print("--- MLP Classifier ---")
+    train_mlp()
+    print("--- Autoencoder OOD Gate ---")
+    train_ae()
+    print("--- Temperature Scaling ---")
+    calibrate()
+
+
+def step9_infer():
+    _banner(9, "INFER -- Three-stage inference on val set")
+    from models.inference_pipeline import run_inference
+    run_inference(split="val")
+
+
+def step10_benchmark():
+    _banner(10, "BENCHMARK -- Four-model comparison + embedding visualisation")
+    from evaluation.benchmark     import run_benchmark
+    from evaluation.embedding_viz import visualise
+    run_benchmark()
+    visualise()
+
+
 STEPS = {
-    1: ("Extract",   step1_extract),
-    2: ("Transform", step2_transform),
-    3: ("Load",      step3_load),
-    4: ("Baseline",  step4_baseline),
-    5: ("Processed", step5_processed),
-    6: ("Metrics",   step6_metrics),
+    1:  ("Extract",    step1_extract),
+    2:  ("Transform",  step2_transform),
+    3:  ("Load",       step3_load),
+    4:  ("Baseline",   step4_baseline),
+    5:  ("Processed",  step5_processed),
+    6:  ("Metrics",    step6_metrics),
+    7:  ("Embeddings", step7_embeddings),
+    8:  ("Train_ML",   step8_train_ml),
+    9:  ("Infer",      step9_infer),
+    10: ("Benchmark",  step10_benchmark),
 }
 
 
@@ -184,17 +227,29 @@ def main():
     else:
         print(f"  PIPELINE COMPLETE -- {total_elapsed:.1f}s total")
         print("")
-        print("  Output files:")
+        print("  Core outputs (steps 1-6):")
         print("    results/baseline_predictions.json")
         print("    results/processed_predictions.json")
         print("    results/baseline_metrics.json")
         print("    results/processed_metrics.json")
         print("    results/comparison.json")
         print("    results/plots/metrics_bar_chart.png")
-        print("    results/plots/confusion_matrix_baseline.png")
-        print("    results/plots/confusion_matrix_processed.png")
-        print("    splits/train.csv")
-        print("    splits/val.csv")
+        print("    splits/train.csv  /  splits/val.csv")
+        print("")
+        print("  ML outputs (steps 7-10):")
+        print("    data/embeddings/manifest.csv")
+        print("    models/saved/mlp_classifier.pt")
+        print("    models/saved/autoencoder.pt")
+        print("    models/saved/ae_threshold.json")
+        print("    models/saved/temperature.json")
+        print("    results/mlp_predictions.json")
+        print("    results/mlp_ae_predictions.json")
+        print("    results/benchmark_table.csv")
+        print("    results/benchmark_comparison.json")
+        print("    results/calibration_improvement.json")
+        print("    results/plots/pca_plot.png")
+        print("    results/plots/tsne_plot.png")
+        print("    results/plots/benchmark_bar.png")
     print("=" * 60 + "\n")
 
 

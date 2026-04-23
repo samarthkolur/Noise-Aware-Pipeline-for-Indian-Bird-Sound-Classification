@@ -22,5 +22,11 @@ env/
 Thumbs.db
 
 # ─── Models and outputs ───────────────────────────────────────────────────────
-models/
+models/saved/
 output_model/
+
+# ─── Results and logs ─────────────────────────────────────────────────────────
+results/
+*.log
+*.code-workspace
+*.docx
