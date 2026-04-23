@@ -199,7 +199,15 @@ def _classify_segment(
     recon_error = float(
         EmbeddingAutoencoder.compute_reconstruction_error(emb, reconstructed).item()
     )
+
+    # Diagnostic logging
+    import logging
+    _log = logging.getLogger("streamlit_inference")
+
     if recon_error > recon_threshold:
+        _log.info(
+            f"[AE REJECT] recon_error={recon_error:.6f} > τ_AE={recon_threshold:.6f} → Noise"
+        )
         return {
             "label": "Noise",
             "prob": 0.0,
@@ -212,12 +220,20 @@ def _classify_segment(
         logits = logits.squeeze(-1)
     prob = float(torch.sigmoid(logits).item())
 
+    # MLP binary convention: prob = P(bird).
+    # high_threshold → confident bird, low_threshold → confident noise
     if prob >= high_threshold:
         label = "Bird"
     elif prob <= low_threshold:
         label = "Noise"
     else:
         label = "Uncertain"
+
+    _log.info(
+        f"[MLP] logit={float(logits.item()):.4f} prob(bird)={prob:.4f} "
+        f"thresholds=[{low_threshold}, {high_threshold}] "
+        f"recon_err={recon_error:.6f} → {label}"
+    )
 
     return {
         "label": label,
