@@ -132,6 +132,7 @@ def plot_ae_histogram(
     recon_errors: np.ndarray,
     tau: float,
     out_path: Path,
+    title: str = "Autoencoder reconstruction error",
 ) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fig, ax = plt.subplots(figsize=(8, 5))
@@ -139,7 +140,7 @@ def plot_ae_histogram(
     ax.axvline(tau, color="#d62728", linestyle="--", linewidth=2, label=f"τ_AE = {tau:.5f}")
     ax.set_xlabel("Reconstruction MSE")
     ax.set_ylabel("Count")
-    ax.set_title("Autoencoder reconstruction error (test split)")
+    ax.set_title(title)
     ax.legend()
     fig.tight_layout()
     fig.savefig(out_path, dpi=150)

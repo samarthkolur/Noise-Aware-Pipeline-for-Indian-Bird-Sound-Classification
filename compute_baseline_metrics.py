@@ -3,18 +3,17 @@
 compute_baseline_metrics.py
 Compare BirdNET baseline vs Noise-Aware Pipeline.
 
-Default mode is a FAIR comparison on the same held-out TEST SPLIT
-(seed=42, test_frac=0.10, stratified). Optional --full-dataset mode
-evaluates both systems on every row in manifest.csv.
+Default mode is a FULL-MANIFEST comparison so FPR is measured against every
+available noise sample. Use ``--test-split`` for the stricter held-out split.
 
-Baseline predictions:  comparison/baseline_normalized.jsonl (confidence @0.5)
-Pipeline metrics:      recomputed from trained classifier on TEST SPLIT ONLY
-                       at threshold=0.5 (same as baseline)
+Baseline predictions:  comparison/baseline_normalized.jsonl
+Pipeline metrics:      recomputed from the trained classifier on the chosen
+                       evaluation set
 Ground truth:          data/embeddings/manifest.csv (noise/ → 0, species → 1)
 
-IMPORTANT: Test-split mode is the fair generalization comparison.
-Full-dataset mode is useful for manifest-wide operational comparison but
-includes training rows for the pipeline.
+IMPORTANT: Full-manifest mode is useful for operational comparisons and finer
+FPR resolution, but it includes training rows for the pipeline. ``--test-split``
+remains the fair generalization comparison.
 """
 
 import csv
@@ -34,6 +33,7 @@ except ModuleNotFoundError:
 import numpy as np
 
 from utils.metrics import confusion_binary, metrics_from_confusion
+from utils.thresholds import resolve_threshold_arg, threshold_mode_label
 
 
 # ── Key building helpers (must match load_ground_truth logic) ──────────────
@@ -338,8 +338,13 @@ def compute_pipeline_metrics(
 
 # ── Plots ─────────────────────────────────────────────────────────────────
 
-def plot_metrics_comparison(baseline: dict, pipeline: dict, out_path: str,
-                            n_test: int = 0):
+def plot_metrics_comparison(
+    baseline: dict,
+    pipeline: dict,
+    out_path: str,
+    n_eval: int = 0,
+    eval_label: str = "full manifest",
+):
     if plt is None:
         print("  [skip plots] matplotlib not installed")
         return
@@ -351,13 +356,13 @@ def plot_metrics_comparison(baseline: dict, pipeline: dict, out_path: str,
     w = 0.35
 
     fig, ax = plt.subplots(figsize=(10, 6))
-    bars_b = ax.bar(x - w / 2, b_vals, w, label="Baseline (Raw BirdNET @0.5)", color="#4C72B0")
-    bars_p = ax.bar(x + w / 2, p_vals, w, label="Noise-Aware Pipeline @0.5",   color="#55A868")
+    bars_b = ax.bar(x - w / 2, b_vals, w, label="Baseline (Raw BirdNET)", color="#4C72B0")
+    bars_p = ax.bar(x + w / 2, p_vals, w, label="Noise-Aware Pipeline",   color="#55A868")
 
     ax.set_ylabel("Score", fontsize=12)
     title = "Performance: Raw BirdNET vs Noise-Aware Pipeline"
-    if n_test:
-        title += f"\n(Same test split, N={n_test})"
+    if n_eval:
+        title += f"\n({eval_label}, N={n_eval})"
     ax.set_title(title, fontsize=13, pad=15)
     ax.set_xticks(x)
     ax.set_xticklabels(labels, fontsize=12)
@@ -377,8 +382,13 @@ def plot_metrics_comparison(baseline: dict, pipeline: dict, out_path: str,
     print(f"  Saved → {out_path}")
 
 
-def plot_error_comparison(baseline: dict, pipeline: dict, out_path: str,
-                          n_test: int = 0):
+def plot_error_comparison(
+    baseline: dict,
+    pipeline: dict,
+    out_path: str,
+    n_eval: int = 0,
+    eval_label: str = "full manifest",
+):
     if plt is None:
         print("  [skip plots] matplotlib not installed")
         return
@@ -395,8 +405,8 @@ def plot_error_comparison(baseline: dict, pipeline: dict, out_path: str,
 
     ax.set_ylabel("Rate", fontsize=12)
     title = "Error Rate Comparison"
-    if n_test:
-        title += f" (N={n_test})"
+    if n_eval:
+        title += f" ({eval_label}, N={n_eval})"
     ax.set_title(title, fontsize=14, pad=15)
     ax.set_xticks(x)
     ax.set_xticklabels(labels, fontsize=11)
@@ -420,17 +430,29 @@ def plot_error_comparison(baseline: dict, pipeline: dict, out_path: str,
 
 def main():
     parser = argparse.ArgumentParser(
-        description="BirdNET baseline vs Pipeline — fair test-split comparison"
+        description="BirdNET baseline vs Pipeline comparison"
     )
     parser.add_argument("--manifest",   default="data/embeddings/manifest.csv")
     parser.add_argument("--baseline",   default="comparison/baseline_normalized.jsonl")
-    parser.add_argument("--threshold",  type=float, default=0.5,
-                        help="Confidence threshold for BirdNET AND MLP (default: 0.5)")
+    parser.add_argument(
+        "--threshold",
+        type=str,
+        default="auto",
+        help="Confidence threshold for BirdNET AND MLP. Use a float or 'auto' "
+             "to load the saved classifier threshold.",
+    )
     parser.add_argument("--config",     type=str,   default="config.yaml")
     parser.add_argument(
         "--full-dataset",
+        dest="full_dataset",
         action="store_true",
-        help="Compare on all manifest rows instead of only the held-out test split.",
+        help="Compare on all manifest rows (default).",
+    )
+    parser.add_argument(
+        "--test-split",
+        dest="full_dataset",
+        action="store_false",
+        help="Restrict comparison to the held-out test split.",
     )
     parser.add_argument(
         "--debug-keys",
@@ -443,7 +465,14 @@ def main():
         default=0.7,
         help="Abort if matched_keys/test_keys is below this rate (default 0.7). Set to 0 to disable.",
     )
+    parser.set_defaults(full_dataset=True)
     args = parser.parse_args()
+
+    from utils.config import load_config
+    cfg = load_config(args.config)
+    threshold = resolve_threshold_arg(args.threshold, cfg)
+    threshold_mode = threshold_mode_label(args.threshold)
+    eval_label = "full manifest" if args.full_dataset else "held-out test split"
 
     print("=" * 65)
     if args.full_dataset:
@@ -456,11 +485,10 @@ def main():
     else:
         print("  Both systems evaluated on the SAME held-out test split")
         print("  (seed=42, test_frac=0.10, stratified — same split as trainer.py)")
-    print(f"  Both thresholded at {args.threshold:.2f}  (apples-to-apples)")
-
-    # ── 1. Load config ──────────────────────────────────────────────
-    from utils.config import load_config
-    cfg = load_config(args.config)
+    if threshold_mode == "auto":
+        print(f"  Threshold source:    saved training optimum → {threshold:.4f}")
+    else:
+        print(f"  Threshold source:    fixed CLI threshold  → {threshold:.4f}")
 
     # ── 2. Build ground truth from manifest ──────────────────────────
     if args.full_dataset:
@@ -478,7 +506,7 @@ def main():
     print(f"  Bird  (y==1):       {n_bird_eval}")
     print(f"  Noise (y==0):       {n_noise_eval}")
     if n_noise_eval == 0:
-        print("  STOP: No noise samples in test split — FPR cannot be computed.")
+        print("  STOP: No noise samples in the chosen eval set — FPR cannot be computed.")
         return
 
     # ── 3. Load baseline predictions ─────────────────────────────────
@@ -510,7 +538,7 @@ def main():
     bl_keys     = set(bl.keys())
     matched     = test_keys & bl_keys
     noise_match = sum(1 for k in matched if eval_gt[k] == 0)
-    print(f"  Test keys:          {len(test_keys)}")
+    print(f"  Eval keys:          {len(test_keys)}")
     print(f"  Baseline keys:      {len(bl_keys)}")
     print(f"  Matched:            {len(matched)}")
     print(f"  GT-only (no detect):{len(test_keys - bl_keys)}  → treated as conf=0 → pred=0")
@@ -535,21 +563,21 @@ def main():
     y_true, y_pred_base = [], []
     for key, label in eval_gt.items():
         conf = bl.get(key, 0.0)
-        pred = 1 if conf >= args.threshold else 0
+        pred = 1 if conf >= threshold else 0
         y_true.append(label)
         y_pred_base.append(pred)
 
     pred_dist = Counter(y_pred_base)
-    print(f"\n--- Step 3: Baseline Predictions on Test Split ---")
+    print(f"\n--- Step 3: Baseline Predictions on Eval Set ---")
     print(f"  y_pred distribution: {{0: {pred_dist[0]}, 1: {pred_dist[1]}}}")
     if 1 not in pred_dist:
-        print("  WARNING: baseline predicts 0 for every test sample — "
+        print("  WARNING: baseline predicts 0 for every eval sample — "
               "check that baseline JSONL keys match manifest structure.")
 
     tp, tn, fp, fn = compute_confusion(y_true, y_pred_base)
     base = metrics_from_confusion(tp, tn, fp, fn)
 
-    print(f"\n--- Baseline Confusion (threshold={args.threshold}) ---")
+    print(f"\n--- Baseline Confusion (threshold={threshold:.4f}) ---")
     print(f"  [[TN={tn:4d}, FP={fp:4d}],")
     print(f"   [FN={fn:4d}, TP={tp:4d}]]   total={tp+tn+fp+fn}")
     print(f"  Accuracy:  {base['accuracy']:.4f}")
@@ -561,18 +589,18 @@ def main():
 
     # ── 5. Pipeline on test split ─────────────────────────────────────
     if args.full_dataset:
-        print(f"\n--- Step 4: Pipeline Metrics on Full Manifest (threshold={args.threshold}) ---")
+        print(f"\n--- Step 4: Pipeline Metrics on Full Manifest (threshold={threshold:.4f}) ---")
     else:
-        print(f"\n--- Step 4: Pipeline Metrics on Test Split (threshold={args.threshold}) ---")
+        print(f"\n--- Step 4: Pipeline Metrics on Test Split (threshold={threshold:.4f}) ---")
     pipe, pipe_n_noise, pipe_n_bird, pipe_n_total = compute_pipeline_metrics(
         config_path=args.config,
-        threshold=args.threshold,
+        threshold=threshold,
         full_dataset=args.full_dataset,
     )
     pipe_tp, pipe_tn = pipe["tp"], pipe["tn"]
     pipe_fp, pipe_fn = pipe["fp"], pipe["fn"]
 
-    print(f"  Test set: {pipe_n_bird} bird + {pipe_n_noise} noise (total={pipe_n_total})")
+    print(f"  Eval set: {pipe_n_bird} bird + {pipe_n_noise} noise (total={pipe_n_total})")
     print(f"  [[TN={pipe_tn:4d}, FP={pipe_fp:4d}],")
     print(f"   [FN={pipe_fn:4d}, TP={pipe_tp:4d}]]")
     print(f"  Accuracy:  {pipe['accuracy']:.4f}")
@@ -611,7 +639,8 @@ def main():
                 ("accuracy", "precision", "recall", "f1", "fpr", "fnr",
                  "tp", "tn", "fp", "fn")}
     base_out["eval_set"] = "full_manifest" if args.full_dataset else "test_split"
-    base_out["threshold"] = args.threshold
+    base_out["threshold"] = threshold
+    base_out["threshold_mode"] = threshold_mode
     base_out["n_total"] = base_total
     base_out["n_bird"] = n_bird_eval
     base_out["n_noise"] = n_noise_eval
@@ -620,7 +649,8 @@ def main():
                 ("accuracy", "precision", "recall", "f1", "fpr", "fnr",
                  "tp", "tn", "fp", "fn")}
     pipe_out["eval_set"] = "full_manifest" if args.full_dataset else "test_split"
-    pipe_out["threshold"] = args.threshold
+    pipe_out["threshold"] = threshold
+    pipe_out["threshold_mode"] = threshold_mode
     pipe_out["n_total"] = pipe_n_total
     pipe_out["n_bird"] = pipe_n_bird
     pipe_out["n_noise"] = pipe_n_noise
@@ -637,7 +667,7 @@ def main():
     )
     comp = {
         "note": (
-            f"{mode_note}N={base_total}. Threshold={args.threshold} for both."
+            f"{mode_note}N={base_total}. Threshold={threshold:.4f} for both."
         ),
         "Baseline (BirdNET)":       base_out,
         "Pipeline (Noise-Aware)":   pipe_out,
@@ -655,12 +685,14 @@ def main():
     plot_metrics_comparison(
         base_out, pipe_out,
         "results/comparison_graphs/metrics_comparison.png",
-        n_test=base_total,
+        n_eval=base_total,
+        eval_label=eval_label,
     )
     plot_error_comparison(
         base_out, pipe_out,
         "results/comparison_graphs/error_comparison.png",
-        n_test=base_total,
+        n_eval=base_total,
+        eval_label=eval_label,
     )
 
     print(f"\n{'=' * 65}")

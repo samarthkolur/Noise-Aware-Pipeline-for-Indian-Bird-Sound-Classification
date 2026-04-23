@@ -27,12 +27,12 @@ import numpy as np
 import torch
 
 # Repo root on sys.path (supports `python research/run_research_suite.py`)
-_ROOT = Path(__file__).resolve().parent.parent
+_ROOT = Path(__file__).resolve().parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 from models.classifier import EmbeddingClassifier
-from research.alignment import get_test_split_arrays, rows_to_baseline_keys
+from research.alignment import get_eval_arrays, rows_to_baseline_keys
 from research.error_mining import mine_and_copy
 from research.metrics_common import metrics_dict
 from research.plots_research import (
@@ -46,6 +46,7 @@ from research.predictors import ae_mlp_predictions, baseline_predictions, mlp_pr
 from research.stats_tests import paired_tests
 from utils.ae_checkpoint import load_tau_ae_and_meta
 from utils.config import load_config
+from utils.thresholds import resolve_threshold_arg, threshold_mode_label
 
 
 def _device(cfg: dict) -> torch.device:
@@ -69,9 +70,10 @@ def _write_benchmark_csv(path: Path, rows: list[dict]) -> None:
 def _report_snippets(
     bench: dict,
     stats: dict,
-    n_test: int,
+    n_eval: int,
     threshold: float,
     auc_results: dict,
+    threshold_mode: str,
 ) -> str:
     """Formal academic-style paragraphs (filled from computed JSON)."""
     sysm = bench["systems"]
@@ -94,10 +96,26 @@ def _report_snippets(
         auc_lines.append(f"{sys_name}: ROC-AUC {roc:.4f}, PR-AUC {pr:.4f}")
     auc_text = "; ".join(auc_lines) if auc_lines else "AUC computation skipped."
 
-    text = f"""
-### Benchmark comparison (held-out test split, N={n_test})
+    eval_key = str(bench.get("eval", "test_split"))
+    if eval_key == "full_manifest":
+        eval_title = "full manifest"
+        eval_desc = (
+            "every manifest row, including rows that were seen during classifier training"
+        )
+    else:
+        eval_title = "held-out test split"
+        eval_desc = "the identical stratified test partition used for fair generalization checks"
 
-Table \\ref{{tab:benchmark}} summarizes binary classification performance for three systems evaluated on the identical stratified test partition (matching training/validation splits). The BirdNET baseline applies a fixed confidence threshold of {threshold} on exported analyzer scores. The noise-aware MLP operates on BirdNET embeddings with identical thresholding ({threshold}) for binary decisions. The full pipeline applies autoencoder-based out-of-distribution rejection prior to the MLP; binary predictions follow the same {threshold} rule on classifier logits for non-rejected embeddings, while rejected embeddings are assigned the noise class.
+    thr_text = (
+        f"the saved validation-optimal threshold ({threshold:.2f})"
+        if threshold_mode == "auto"
+        else f"a fixed threshold of {threshold:.2f}"
+    )
+
+    text = f"""
+### Benchmark comparison ({eval_title}, N={n_eval})
+
+Table \\ref{{tab:benchmark}} summarizes binary classification performance for three systems evaluated on {eval_desc}. The BirdNET baseline applies {thr_text} to exported analyzer scores. The noise-aware MLP operates on BirdNET embeddings with the same binary cutoff. The full pipeline applies autoencoder-based out-of-distribution rejection prior to the MLP; binary predictions follow the same cutoff on classifier logits for non-rejected embeddings, while rejected embeddings are assigned the noise class.
 
 Observed metrics — Baseline: accuracy {b['accuracy']:.4f}, F1 {b['f1']:.4f}, FPR {b['fpr']:.4f}, FNR {b['fnr']:.4f}; MLP-only: accuracy {m['accuracy']:.4f}, F1 {m['f1']:.4f}, FPR {m['fpr']:.4f}, FNR {m['fnr']:.4f}; MLP+AE: accuracy {a['accuracy']:.4f}, F1 {a['f1']:.4f}, FPR {a['fpr']:.4f}, FNR {a['fnr']:.4f}.
 
@@ -131,14 +149,35 @@ def main() -> None:
         default=None,
         help="BirdNET baseline JSONL (default: comparison/baseline_normalized.jsonl)",
     )
-    parser.add_argument("--threshold", type=float, default=0.5, help="BirdNET & MLP binary threshold")
+    parser.add_argument(
+        "--threshold",
+        type=str,
+        default="auto",
+        help="BirdNET & MLP binary threshold. Use a float or 'auto' "
+             "to load the saved classifier threshold.",
+    )
     parser.add_argument("--top-k", type=int, default=10)
     parser.add_argument("--results-dir", type=str, default="results")
+    parser.add_argument(
+        "--full-dataset",
+        dest="full_dataset",
+        action="store_true",
+        help="Evaluate on all manifest rows (default).",
+    )
+    parser.add_argument(
+        "--test-split",
+        dest="full_dataset",
+        action="store_false",
+        help="Restrict the benchmark to the held-out test split.",
+    )
     parser.add_argument("--skip-plots", action="store_true")
     parser.add_argument("--skip-tsne", action="store_true")
+    parser.set_defaults(full_dataset=True)
     args = parser.parse_args()
 
     cfg = load_config(args.config)
+    threshold = resolve_threshold_arg(args.threshold, cfg)
+    threshold_mode = threshold_mode_label(args.threshold)
     project_root = _ROOT
     results_dir = project_root / args.results_dir
     plots_dir = results_dir / "plots"
@@ -155,21 +194,29 @@ def main() -> None:
         )
 
     device = _device(cfg)
-    embs, y_true, rows, test_idx = get_test_split_arrays(cfg)
+    embs, y_true, rows, _eval_idx = get_eval_arrays(cfg, full_dataset=args.full_dataset)
     keys = rows_to_baseline_keys(rows)
 
-    pred_b, prob_b = baseline_predictions(keys, baseline_path, threshold=args.threshold)
-    pred_m, prob_m = mlp_predictions(cfg, embs, device, threshold=args.threshold)
-    pred_a, prob_a, recon_err, ood = ae_mlp_predictions(cfg, embs, device, mlp_threshold=args.threshold)
+    pred_b, prob_b = baseline_predictions(keys, baseline_path, threshold=threshold)
+    pred_m, prob_m = mlp_predictions(cfg, embs, device, threshold=threshold)
+    pred_a, prob_a, recon_err, ood = ae_mlp_predictions(
+        cfg, embs, device, mlp_threshold=threshold
+    )
 
     mb = metrics_dict(y_true, pred_b)
     mm = metrics_dict(y_true, pred_m)
     ma = metrics_dict(y_true, pred_a)
+    n_noise = int((y_true == 0).sum())
+    n_bird = int((y_true == 1).sum())
+    eval_key = "full_manifest" if args.full_dataset else "test_split"
 
     bench_payload = {
-        "eval": "test_split",
-        "threshold": args.threshold,
-        "n_test": int(len(y_true)),
+        "eval": eval_key,
+        "threshold": threshold,
+        "threshold_mode": threshold_mode,
+        "n_total": int(len(y_true)),
+        "n_noise": n_noise,
+        "n_bird": n_bird,
         "seed": cfg.get("project", {}).get("seed", 42),
         "systems": {
             "birdnet_baseline": {k: mb[k] for k in ("accuracy", "precision", "recall", "f1", "fpr", "fnr", "tp", "tn", "fp", "fn")},
@@ -181,10 +228,11 @@ def main() -> None:
     with open(results_dir / "benchmark_comparison.json", "w", encoding="utf-8") as f:
         json.dump(bench_payload, f, indent=2)
 
+    threshold_tag = f"{threshold:.2f}" if threshold_mode == "fixed" else f"auto->{threshold:.2f}"
     csv_rows = [
-        {"system": "BirdNET baseline (0.5)", **{k: mb[k] for k in ("accuracy", "precision", "recall", "f1", "fpr", "fnr")}},
-        {"system": "Noise-aware MLP only (0.5)", **{k: mm[k] for k in ("accuracy", "precision", "recall", "f1", "fpr", "fnr")}},
-        {"system": "Noise-aware MLP + AE gate (0.5)", **{k: ma[k] for k in ("accuracy", "precision", "recall", "f1", "fpr", "fnr")}},
+        {"system": f"BirdNET baseline ({threshold_tag})", **{k: mb[k] for k in ("accuracy", "precision", "recall", "f1", "fpr", "fnr")}},
+        {"system": f"Noise-aware MLP only ({threshold_tag})", **{k: mm[k] for k in ("accuracy", "precision", "recall", "f1", "fpr", "fnr")}},
+        {"system": f"Noise-aware MLP + AE gate ({threshold_tag})", **{k: ma[k] for k in ("accuracy", "precision", "recall", "f1", "fpr", "fnr")}},
     ]
     _write_benchmark_csv(results_dir / "benchmark_table.csv", csv_rows)
 
@@ -248,7 +296,17 @@ def main() -> None:
             skip_tsne=args.skip_tsne,
         )
 
-        plot_ae_histogram(recon_err, tau, plots_dir / "ae_error_distribution.png")
+        ae_hist_title = (
+            "Autoencoder reconstruction error (full manifest)"
+            if args.full_dataset
+            else "Autoencoder reconstruction error (test split)"
+        )
+        plot_ae_histogram(
+            recon_err,
+            tau,
+            plots_dir / "ae_error_distribution.png",
+            title=ae_hist_title,
+        )
 
         # Confusion matrix heatmaps (new)
         plot_confusion_matrix_heatmap(
@@ -302,7 +360,12 @@ def main() -> None:
         plot_feature_importance_mlp(model, embs, device, plots_dir / "feature_importance.png")
 
     snippets = _report_snippets(
-        bench_payload, stats_payload, int(len(y_true)), args.threshold, auc_results
+        bench_payload,
+        stats_payload,
+        int(len(y_true)),
+        threshold,
+        auc_results,
+        threshold_mode,
     )
     with open(results_dir / "report_snippets.txt", "w", encoding="utf-8") as f:
         f.write(snippets)
