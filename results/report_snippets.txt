@@ -2,11 +2,17 @@
 
 Table \ref{tab:benchmark} summarizes binary classification performance for three systems evaluated on the identical stratified test partition (matching training/validation splits). The BirdNET baseline applies a fixed confidence threshold of 0.5 on exported analyzer scores. The noise-aware MLP operates on BirdNET embeddings with identical thresholding (0.5) for binary decisions. The full pipeline applies autoencoder-based out-of-distribution rejection prior to the MLP; binary predictions follow the same 0.5 rule on classifier logits for non-rejected embeddings, while rejected embeddings are assigned the noise class.
 
-Observed metrics — Baseline: accuracy 0.5154, F1 0.0000, FPR 0.0000, FNR 1.0000; MLP-only: accuracy 0.8090, F1 0.8033, FPR 0.1873, FNR 0.1951; MLP+AE: accuracy 0.8010, F1 0.7899, FPR 0.1718, FNR 0.2279.
+Observed metrics — Baseline: accuracy 0.4279, F1 0.5854, FPR 0.0400, FNR 0.5857; MLP-only: accuracy 0.9990, F1 0.9995, FPR 0.0400, FNR 0.0000; MLP+AE: accuracy 0.9900, F1 0.9949, FPR 0.0400, FNR 0.0092.
+
+### Area under curve
+
+BirdNET Baseline: ROC-AUC 0.7131, PR-AUC 0.9918; MLP Only: ROC-AUC 0.9989, PR-AUC 1.0000; MLP + AE Gate: ROC-AUC 0.9906, PR-AUC 0.9998
+
+ROC and Precision-Recall curves are provided in Figure \ref{fig:roc} and Figure \ref{fig:pr} respectively.
 
 ### Statistical validation
 
-We assessed paired differences in per-segment correctness (indicator equal to one if the predicted label matches the manifest-derived bird/noise label). A paired t-test and a Wilcoxon signed-rank test were applied to compare (i) BirdNET baseline versus the embedding MLP, and (ii) the MLP without versus with the autoencoder gate. For baseline versus MLP, the paired t-test yielded p = 1.9251e-44 (Wilcoxon p = 1.3480e-40); for MLP versus MLP+AE, the paired t-test yielded p = 1.0250e-01 (Wilcoxon p = 1.0247e-01). Values below the conventional α = 0.05 threshold are interpreted as evidence of a statistically significant shift in paired accuracy between systems on the same segments.
+We assessed paired differences in per-segment correctness (indicator equal to one if the predicted label matches the manifest-derived bird/noise label). A paired t-test and a Wilcoxon signed-rank test were applied to compare (i) BirdNET baseline versus the embedding MLP, and (ii) the MLP without versus with the autoencoder gate. For baseline versus MLP, the paired t-test yielded p = 8.8938e-186 (Wilcoxon p = 2.0547e-126); for MLP versus MLP+AE, the paired t-test yielded p = 2.6601e-03 (Wilcoxon p = 2.6998e-03). Values below the conventional α = 0.05 threshold are interpreted as evidence of a statistically significant shift in paired accuracy between systems on the same segments.
 
 ### Error analysis and qualitative review
 
@@ -14,4 +20,4 @@ Automated mining identifies high-confidence false positives, high-uncertainty fa
 
 ### Visualizations
 
-PCA and t-SNE projections of BirdNET embeddings visualize class structure and highlight autoencoder-rejected points relative to bird and noise labels. The reconstruction-error histogram situates the learned threshold τ_AE within the empirical error distribution. The bar chart summarizes an approximate MLP interpretability signal combining gradient magnitude with respect to inputs and first-layer weight magnitudes across embedding dimensions (not a CNN Grad-CAM map, but a standard post-hoc attribution for MLPs on fixed embeddings).
+PCA and t-SNE projections of BirdNET embeddings visualize class structure and highlight autoencoder-rejected points relative to bird and noise labels. The reconstruction-error histogram situates the learned threshold τ_AE within the empirical error distribution. Confusion matrix heatmaps show per-class accuracy for all three systems. The bar chart summarizes an approximate MLP interpretability signal combining gradient magnitude with respect to inputs and first-layer weight magnitudes across embedding dimensions (not a CNN Grad-CAM map, but a standard post-hoc attribution for MLPs on fixed embeddings).

@@ -1,4 +1,9 @@
-"""Lightweight audio heuristics for error tagging (insect / wind / faint bird)."""
+"""Lightweight audio heuristics for error tagging (insect / wind / faint bird).
+
+Thresholds are collected in ``HEURISTIC_DEFAULTS`` and can be overridden
+via ``tag_segment(..., overrides={...})``.  The research suite loads these
+from ``config.yaml → research.heuristics`` for fully config-driven behavior.
+"""
 
 from __future__ import annotations
 
@@ -18,6 +23,21 @@ except ImportError:
     sf = None
 
 
+# ── Configurable defaults ──────────────────────────────────
+# Each key maps to a threshold used in tag_segment(). The research suite
+# reads these from config.yaml → research.heuristics and passes as overrides.
+HEURISTIC_DEFAULTS: Dict[str, float] = {
+    "zcr_insect_thresh": 0.25,
+    "flatness_insect_thresh": 0.15,
+    "low_freq_wind_ratio_thresh": 0.55,
+    "faint_rms_db_thresh": -35.0,
+    "periodicity_lag_min": 200,
+    "periodicity_lag_max": 3000,
+    "periodicity_peak_ratio_thresh": 0.15,
+    "faint_periodic_rms_db_thresh": -32.0,
+}
+
+
 def _load_mono(path: Path, max_sec: float = 3.5) -> Optional[tuple[np.ndarray, int]]:
     path = Path(path)
     if not path.is_file():
@@ -35,8 +55,21 @@ def _load_mono(path: Path, max_sec: float = 3.5) -> Optional[tuple[np.ndarray, i
     return None
 
 
-def tag_segment(path: str | Path) -> Dict[str, Optional[float]]:
-    """Return heuristic scores; higher flatness/zcr → insect-like; low_freq_ratio for wind."""
+def tag_segment(
+    path: str | Path,
+    overrides: Optional[Dict[str, float]] = None,
+) -> Dict[str, Optional[float]]:
+    """Return heuristic scores; higher flatness/zcr → insect-like; low_freq_ratio for wind.
+
+    Args:
+        path: Path to a WAV segment.
+        overrides: Optional dict of threshold overrides (keys from HEURISTIC_DEFAULTS).
+    """
+    # Merge defaults with any overrides
+    params = {**HEURISTIC_DEFAULTS}
+    if overrides:
+        params.update(overrides)
+
     out: Dict[str, Optional[float]] = {
         "rms_db": None,
         "zcr": None,
@@ -81,21 +114,34 @@ def tag_segment(path: str | Path) -> Dict[str, Optional[float]]:
 
     tags = []
     if out["zcr"] is not None and out["spectral_flatness_mean"] is not None:
-        if out["zcr"] > 0.25 and out["spectral_flatness_mean"] > 0.15:
+        if (
+            out["zcr"] > params["zcr_insect_thresh"]
+            and out["spectral_flatness_mean"] > params["flatness_insect_thresh"]
+        ):
             tags.append("insect_like")
-    if out["low_freq_energy_ratio"] is not None and out["low_freq_energy_ratio"] > 0.55:
+    if (
+        out["low_freq_energy_ratio"] is not None
+        and out["low_freq_energy_ratio"] > params["low_freq_wind_ratio_thresh"]
+    ):
         tags.append("wind_like")
-    if out["rms_db"] is not None and out["rms_db"] < -35.0:
+    if out["rms_db"] is not None and out["rms_db"] < params["faint_rms_db_thresh"]:
         tags.append("faint_rms")
+
     # Crude periodicity proxy (faint tonal / pulsed calls vs. flat noise)
     if len(y) > 8000:
         yc = y - y.mean()
         full_ac = np.correlate(yc, yc, mode="full")
         mid = len(yc) - 1
-        lag_win = full_ac[mid + 200 : mid + 3000]
+        lag_min_idx = int(params["periodicity_lag_min"])
+        lag_max_idx = int(params["periodicity_lag_max"])
+        lag_win = full_ac[mid + lag_min_idx : mid + lag_max_idx]
         peak = float(np.max(np.abs(lag_win)) / (np.abs(full_ac[mid]) + eps))
         out["periodicity_peak_ratio"] = peak
-        if out["rms_db"] is not None and out["rms_db"] < -32.0 and peak > 0.15:
+        if (
+            out["rms_db"] is not None
+            and out["rms_db"] < params["faint_periodic_rms_db_thresh"]
+            and peak > params["periodicity_peak_ratio_thresh"]
+        ):
             tags.append("faint_periodic_candidate")
     out["tags"] = tags
     return out

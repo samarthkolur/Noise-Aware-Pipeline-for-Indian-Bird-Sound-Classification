@@ -87,6 +87,8 @@ def evaluate(cfg: dict, *, full_dataset: bool = False) -> None:
         )
 
     ds_cfg = cfg.get("dataset", {})
+    eval_cfg = cfg.get("evaluation", {})
+    eval_batch_size = int(eval_cfg.get("batch_size", 64))
     splits = create_splits(
         dataset,
         val_frac=ds_cfg.get("val_split", 0.15),
@@ -96,12 +98,12 @@ def evaluate(cfg: dict, *, full_dataset: bool = False) -> None:
     )
 
     if full_dataset:
-        eval_loader = DataLoader(dataset, batch_size=64, shuffle=False)
+        eval_loader = DataLoader(dataset, batch_size=eval_batch_size, shuffle=False)
         eval_label = "full manifest"
         n_eval = len(dataset)
     else:
         test_subset = Subset(dataset, splits.test_idx)
-        eval_loader = DataLoader(test_subset, batch_size=64, shuffle=False)
+        eval_loader = DataLoader(test_subset, batch_size=eval_batch_size, shuffle=False)
         eval_label = "test split"
         n_eval = len(splits.test_idx)
 

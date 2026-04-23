@@ -246,14 +246,16 @@ def gated_pred_uncertain_as_bird(
     probs: np.ndarray,
     low_t: float,
 ) -> np.ndarray:
-    """pred bird iff (pass AE) and prob > low_t; OOD → noise."""
+    """pred bird iff (pass AE) and prob > low_t; OOD → noise.
+
+    Vectorized implementation — no Python loop.
+    """
     ae_reject = recon_errors > tau
+    # Default: everything is noise (0)
     preds = np.zeros(len(probs), dtype=np.int64)
-    for i in range(len(probs)):
-        if ae_reject[i]:
-            preds[i] = 0
-        else:
-            preds[i] = 1 if probs[i] > low_t else 0
+    # Non-rejected segments with prob > low_t are bird (1)
+    bird_mask = (~ae_reject) & (probs > low_t)
+    preds[bird_mask] = 1
     return preds
 
 

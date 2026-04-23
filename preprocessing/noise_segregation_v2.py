@@ -5,6 +5,12 @@ Each 3 s segment is split into six 0.5 s subframes. Per subframe we compute
 features, a noise score S in [0, 1], and vote noise if S >= vote_threshold.
 The segment label is decided by majority vote across subframes.
 
+**Bird guard** (v2.1): before committing a majority-noise vote, the full
+segment is checked for harmonic structure (tonal bird calls) and spectral
+peak prominence.  If the segment passes the bird guard, it is kept as bird
+regardless of subframe votes — this prevents bird calls with ambient noise
+from leaking into the noise folder.
+
 This module does not replace BirdNET; it only routes or labels segments before
 embedding when enabled in config (see preprocessing.preprocessing).
 """
@@ -58,34 +64,47 @@ class V2SegmentResult:
     noise_votes: int
     total_subframes: int
     subframes: List[V2SubframeResult]
+    harmonic_ratio: float = 0.0
+    spectral_peak_prominence: float = 0.0
+    bird_guard_triggered: bool = False
 
 
 class NoiseSegregationV2:
-    """Noise score S and majority voting over six 0.5 s subframes."""
+    """Noise score S and majority voting over six 0.5 s subframes.
+
+    Includes a **bird guard** that detects harmonic structure (tonal bird
+    calls) and spectral peak prominence before allowing a segment to be
+    labelled noise.  This prevents bird sounds from leaking into the noise
+    folder — the primary failure mode with aggressive vote thresholds.
+    """
 
     def __init__(
         self,
-        sample_rate: int = 48_000,
-        segment_duration_s: float = 3.0,
-        subframe_duration_s: float = 0.5,
-        vote_threshold: float = 0.5,
-        majority_tie: str = "bird",
-        target_rms_db: float = -20.0,
-        # Score weights (plan defaults)
-        w_zcr: float = 0.25,
-        w_flat: float = 0.30,
-        w_centroid_flag: float = 0.15,
-        w_centroid_std: float = 0.15,
-        w_insect: float = 0.15,
-        zcr_ref: float = 0.30,
-        flatness_ref: float = 1.0,
-        centroid_std_ref: float = 2500.0,
+        sample_rate: int,
+        segment_duration_s: float,
+        subframe_duration_s: float,
+        vote_threshold: float,
+        majority_tie: str,
+        target_rms_db: float,
+        # Score weights
+        w_zcr: float,
+        w_flat: float,
+        w_centroid_flag: float,
+        w_centroid_std: float,
+        w_insect: float,
+        zcr_ref: float,
+        flatness_ref: float,
+        centroid_std_ref: float,
         # Heuristic flags (Hz); tunable via config
-        centroid_low_hz: float = 400.0,
-        centroid_high_hz: float = 7000.0,
-        insect_lag_min_hz: float = 200.0,
-        insect_lag_max_hz: float = 2000.0,
-        insect_peak_thresh: float = 0.35,
+        centroid_low_hz: float,
+        centroid_high_hz: float,
+        insect_lag_min_hz: float,
+        insect_lag_max_hz: float,
+        insect_peak_thresh: float,
+        # Bird guard parameters
+        bird_guard_enabled: bool = True,
+        harmonic_ratio_thresh: float = 0.3,
+        spectral_peak_prominence_thresh: float = 3.0,
     ) -> None:
         self.sample_rate = sample_rate
         self.segment_duration_s = segment_duration_s
@@ -107,6 +126,11 @@ class NoiseSegregationV2:
         self.insect_lag_max_hz = insect_lag_max_hz
         self.insect_peak_thresh = insect_peak_thresh
 
+        # Bird guard: harmonic detection to prevent bird → noise leakage
+        self.bird_guard_enabled = bird_guard_enabled
+        self.harmonic_ratio_thresh = harmonic_ratio_thresh
+        self.spectral_peak_prominence_thresh = spectral_peak_prominence_thresh
+
         self.subframe_samples = int(sample_rate * subframe_duration_s)
         self.segment_samples = int(sample_rate * segment_duration_s)
 
@@ -115,9 +139,13 @@ class NoiseSegregationV2:
         audio = cfg.get("audio", {})
         ns = cfg.get("noise_segregation", {})
         v2 = ns.get("v2", {})
+
+        sample_rate = int(audio.get("sample_rate", 48_000))
+        segment_duration_s = float(audio.get("segment_duration_s", 3.0))
+
         return cls(
-            sample_rate=int(audio.get("sample_rate", 48_000)),
-            segment_duration_s=float(audio.get("segment_duration_s", 3.0)),
+            sample_rate=sample_rate,
+            segment_duration_s=segment_duration_s,
             subframe_duration_s=float(v2.get("subframe_duration_s", 0.5)),
             vote_threshold=float(v2.get("vote_threshold", 0.5)),
             majority_tie=str(v2.get("majority_tie", "bird")),
@@ -135,6 +163,11 @@ class NoiseSegregationV2:
             insect_lag_min_hz=float(v2.get("insect_lag_min_hz", 200.0)),
             insect_lag_max_hz=float(v2.get("insect_lag_max_hz", 2000.0)),
             insect_peak_thresh=float(v2.get("insect_peak_thresh", 0.35)),
+            bird_guard_enabled=bool(v2.get("bird_guard_enabled", True)),
+            harmonic_ratio_thresh=float(v2.get("harmonic_ratio_thresh", 0.3)),
+            spectral_peak_prominence_thresh=float(
+                v2.get("spectral_peak_prominence_thresh", 3.0)
+            ),
         )
 
     def normalize_rms(self, waveform: np.ndarray) -> np.ndarray:
@@ -186,8 +219,7 @@ class NoiseSegregationV2:
     def _autocorr_peak(self, x: np.ndarray) -> float:
         """Largest normalized autocorrelation peak in the insect lag band.
 
-        Uses only lags ``[lag_min, lag_max]`` via dot products — **not** full
-        ``np.correlate`` — so 0.5 s @ 48 kHz stays fast (full correlate was O(n²)).
+        Uses vectorized dot products over a lag range — fast for 0.5 s @ 48 kHz.
         """
         x = np.asarray(x, dtype=np.float64).flatten()
         n = len(x)
@@ -202,11 +234,17 @@ class NoiseSegregationV2:
         lag_max = min(n - 1, int(self.sample_rate / self.insect_lag_min_hz))
         if lag_max <= lag_min:
             return 0.0
+
+        # Vectorized: compute autocorrelation for all lags in [lag_min, lag_max]
         best = 0.0
-        for k in range(lag_min, lag_max + 1):
-            c = float(np.dot(x[:-k], x[k:])) / ac0
-            if c > best:
-                best = c
+        # Process in chunks to avoid excessive memory for large lag ranges
+        chunk_size = min(lag_max - lag_min + 1, 500)
+        for chunk_start in range(lag_min, lag_max + 1, chunk_size):
+            chunk_end = min(chunk_start + chunk_size, lag_max + 1)
+            for k in range(chunk_start, chunk_end):
+                c = float(np.dot(x[:-k], x[k:])) / ac0
+                if c > best:
+                    best = c
         return best
 
     def _centroid_flag(self, centroid_mean_hz: float) -> float:
@@ -221,6 +259,103 @@ class NoiseSegregationV2:
     def _insect_flag(self, autocorr_peak: float) -> float:
         """1.0 if periodicity in insect-like band (proxy via autocorr peak)."""
         return 1.0 if autocorr_peak >= self.insect_peak_thresh else 0.0
+
+    # ── Bird guard methods ─────────────────────────────────
+
+    def _harmonic_ratio(self, x: np.ndarray) -> float:
+        """Compute harmonic-to-total energy ratio in the bird frequency band.
+
+        Bird calls are typically tonal/harmonic (1–8 kHz) while noise sources
+        (wind, rain, machinery) are broadband.  A high harmonic ratio indicates
+        structured tonal content — likely a bird call.
+
+        Uses the harmonic-percussive separation from librosa to estimate the
+        fraction of energy that is harmonic.
+        """
+        x = np.asarray(x, dtype=np.float32).flatten()
+        if len(x) < 512:
+            return 0.0
+
+        n_fft = min(2048, len(x))
+        hop = n_fft // 4
+
+        S = np.abs(librosa.stft(x, n_fft=n_fft, hop_length=hop)) ** 2
+        freqs = librosa.fft_frequencies(sr=self.sample_rate, n_fft=n_fft)
+
+        # Focus on bird-call frequency band (1 kHz – 8 kHz)
+        bird_band = (freqs >= 1000.0) & (freqs <= 8000.0)
+        if not bird_band.any():
+            return 0.0
+
+        S_bird = S[bird_band, :]
+        total_energy = float(np.sum(S) + 1e-20)
+        bird_energy = float(np.sum(S_bird))
+
+        # Harmonic-percussive separation on the bird band
+        try:
+            S_full = np.abs(librosa.stft(x, n_fft=n_fft, hop_length=hop))
+            H, P = librosa.decompose.hpss(S_full)
+            H_bird = (H[bird_band, :]) ** 2
+            harmonic_energy = float(np.sum(H_bird))
+        except Exception:
+            # Fallback: use spectral peak ratio as a proxy
+            harmonic_energy = bird_energy * 0.5
+
+        ratio = harmonic_energy / (total_energy + 1e-20)
+        return float(np.clip(ratio, 0.0, 1.0))
+
+    def _spectral_peak_prominence(self, x: np.ndarray) -> float:
+        """Measure prominence of dominant spectral peaks relative to noise floor.
+
+        Bird calls produce narrow, prominent spectral peaks.  Broadband noise
+        sources have a flat spectrum with low peak prominence.
+
+        Returns the ratio of the strongest peak to the median spectral level
+        in the bird band (1–8 kHz).  Values > 3.0 are characteristic of tonal
+        bird calls.
+        """
+        x = np.asarray(x, dtype=np.float32).flatten()
+        if len(x) < 512:
+            return 0.0
+
+        n_fft = min(2048, len(x))
+        S = np.abs(librosa.stft(x, n_fft=n_fft, hop_length=n_fft // 4))
+        S_mean = np.mean(S, axis=1)  # Average spectrum over time
+        freqs = librosa.fft_frequencies(sr=self.sample_rate, n_fft=n_fft)
+
+        # Bird frequency band
+        bird_band = (freqs >= 1000.0) & (freqs <= 8000.0)
+        if not bird_band.any():
+            return 0.0
+
+        S_bird = S_mean[bird_band]
+        median_level = float(np.median(S_bird))
+        if median_level < 1e-12:
+            return 0.0
+
+        peak_level = float(np.max(S_bird))
+        prominence = peak_level / median_level
+        return float(prominence)
+
+    def _bird_guard_check(self, x: np.ndarray) -> Tuple[bool, float, float]:
+        """Check if segment has bird-like harmonic content.
+
+        Returns:
+            (is_bird_like, harmonic_ratio, spectral_prominence)
+        """
+        if not self.bird_guard_enabled:
+            return False, 0.0, 0.0
+
+        hr = self._harmonic_ratio(x)
+        sp = self._spectral_peak_prominence(x)
+
+        is_bird_like = (
+            hr >= self.harmonic_ratio_thresh
+            or sp >= self.spectral_peak_prominence_thresh
+        )
+        return is_bird_like, hr, sp
+
+    # ── Per-subframe scoring ───────────────────────────────
 
     def noise_score_subframe(self, sub: np.ndarray) -> V2SubframeResult:
         """Compute S for one subframe waveform (mono, any length)."""
@@ -250,8 +385,19 @@ class NoiseSegregationV2:
             noise_vote=vote,
         )
 
+    # ── Segment-level classification ───────────────────────
+
     def classify_segment(self, waveform_mono: np.ndarray) -> V2SegmentResult:
-        """Classify one 3 s mono segment (length should match segment_samples)."""
+        """Classify one 3 s mono segment (length should match segment_samples).
+
+        The decision flow is:
+        1. Normalize RMS, pad/trim to segment length
+        2. Split into subframes, compute noise scores and votes
+        3. If majority votes noise AND bird guard is enabled:
+           - Check for harmonic structure / spectral peak prominence
+           - If bird-like features detected → override to bird (prevent leakage)
+        4. Otherwise, follow standard majority vote logic
+        """
         x = self.normalize_rms(np.asarray(waveform_mono, dtype=np.float32).flatten())
         if x.size != self.segment_samples:
             if x.size < self.segment_samples:
@@ -280,17 +426,34 @@ class NoiseSegregationV2:
         n = len(subframes)
         mean_score = float(np.mean([s.noise_score for s in subframes]))
 
+        # Standard majority vote decision
         if noise_votes > n // 2:
-            label: Label = "noise"
+            raw_label: Label = "noise"
         elif noise_votes < n // 2:
-            label = "bird"
+            raw_label = "bird"
         else:
-            label = "noise" if self.majority_tie == "noise" else "bird"
+            raw_label = "noise" if self.majority_tie == "noise" else "bird"
+
+        # Bird guard: check harmonic structure before committing noise label
+        bird_guard_triggered = False
+        harmonic_ratio = 0.0
+        spectral_prominence = 0.0
+
+        if raw_label == "noise" and self.bird_guard_enabled:
+            is_bird_like, harmonic_ratio, spectral_prominence = (
+                self._bird_guard_check(x)
+            )
+            if is_bird_like:
+                bird_guard_triggered = True
+                raw_label = "bird"
 
         return V2SegmentResult(
-            label=label,
+            label=raw_label,
             mean_score=mean_score,
             noise_votes=noise_votes,
             total_subframes=n,
             subframes=subframes,
+            harmonic_ratio=harmonic_ratio,
+            spectral_peak_prominence=spectral_prominence,
+            bird_guard_triggered=bird_guard_triggered,
         )

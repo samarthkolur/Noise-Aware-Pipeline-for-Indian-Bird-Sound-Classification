@@ -220,6 +220,20 @@ class BirdNETEncoder(BaseEncoder):
     _EMB_DIM = 1024
 
     def __init__(self, cfg: dict) -> None:
+        # Validate that config audio settings are compatible with BirdNET V2.4
+        cfg_sr = int(cfg.get("audio", {}).get("sample_rate", 0))
+        cfg_dur = float(cfg.get("audio", {}).get("segment_duration_s", 0))
+        if cfg_sr != 0 and cfg_sr != self._EXPECTED_SR:
+            raise ValueError(
+                f"BirdNET V2.4 requires audio.sample_rate={self._EXPECTED_SR} "
+                f"but config has {cfg_sr}. This is a model architecture constraint."
+            )
+        if cfg_dur != 0 and abs(cfg_dur - self._EXPECTED_DUR) > 0.01:
+            raise ValueError(
+                f"BirdNET V2.4 requires audio.segment_duration_s={self._EXPECTED_DUR} "
+                f"but config has {cfg_dur}. This is a model architecture constraint."
+            )
+
         resolved = _resolve_birdnet_model_path(cfg)
 
         logger.info("Loading BirdNET model from: %s", str(resolved))

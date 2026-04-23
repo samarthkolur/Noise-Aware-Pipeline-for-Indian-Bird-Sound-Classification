@@ -9,7 +9,9 @@ Outputs (default under ./results/):
     benchmark_comparison.json, benchmark_table.csv
     statistical_tests.json
     error_analysis.json, error_samples/...
-    plots/pca_plot.png, tsne_plot.png, ae_error_distribution.png, feature_importance.png
+    plots/pca_plot.png, tsne_plot.png, ae_error_distribution.png
+    plots/feature_importance.png, confusion_matrices.png
+    plots/roc_curves.png, pr_curves.png
     report_snippets.txt
 """
 
@@ -35,8 +37,10 @@ from research.error_mining import mine_and_copy
 from research.metrics_common import metrics_dict
 from research.plots_research import (
     plot_ae_histogram,
+    plot_confusion_matrix_heatmap,
     plot_feature_importance_mlp,
     plot_pca_tsne,
+    plot_roc_pr_curves,
 )
 from research.predictors import ae_mlp_predictions, baseline_predictions, mlp_predictions
 from research.stats_tests import paired_tests
@@ -67,6 +71,7 @@ def _report_snippets(
     stats: dict,
     n_test: int,
     threshold: float,
+    auc_results: dict,
 ) -> str:
     """Formal academic-style paragraphs (filled from computed JSON)."""
     sysm = bench["systems"]
@@ -81,12 +86,26 @@ def _report_snippets(
     w_bm_s = f"{w_bm:.4e}" if w_bm is not None else "n/a"
     w_ma_s = f"{w_ma:.4e}" if w_ma is not None else "n/a"
 
+    # AUC summary
+    auc_lines = []
+    for sys_name, aucs in auc_results.items():
+        roc = aucs.get("roc_auc", 0)
+        pr = aucs.get("pr_auc", 0)
+        auc_lines.append(f"{sys_name}: ROC-AUC {roc:.4f}, PR-AUC {pr:.4f}")
+    auc_text = "; ".join(auc_lines) if auc_lines else "AUC computation skipped."
+
     text = f"""
 ### Benchmark comparison (held-out test split, N={n_test})
 
 Table \\ref{{tab:benchmark}} summarizes binary classification performance for three systems evaluated on the identical stratified test partition (matching training/validation splits). The BirdNET baseline applies a fixed confidence threshold of {threshold} on exported analyzer scores. The noise-aware MLP operates on BirdNET embeddings with identical thresholding ({threshold}) for binary decisions. The full pipeline applies autoencoder-based out-of-distribution rejection prior to the MLP; binary predictions follow the same {threshold} rule on classifier logits for non-rejected embeddings, while rejected embeddings are assigned the noise class.
 
 Observed metrics — Baseline: accuracy {b['accuracy']:.4f}, F1 {b['f1']:.4f}, FPR {b['fpr']:.4f}, FNR {b['fnr']:.4f}; MLP-only: accuracy {m['accuracy']:.4f}, F1 {m['f1']:.4f}, FPR {m['fpr']:.4f}, FNR {m['fnr']:.4f}; MLP+AE: accuracy {a['accuracy']:.4f}, F1 {a['f1']:.4f}, FPR {a['fpr']:.4f}, FNR {a['fnr']:.4f}.
+
+### Area under curve
+
+{auc_text}
+
+ROC and Precision-Recall curves are provided in Figure \\ref{{fig:roc}} and Figure \\ref{{fig:pr}} respectively.
 
 ### Statistical validation
 
@@ -98,7 +117,7 @@ Automated mining identifies high-confidence false positives, high-uncertainty fa
 
 ### Visualizations
 
-PCA and t-SNE projections of BirdNET embeddings visualize class structure and highlight autoencoder-rejected points relative to bird and noise labels. The reconstruction-error histogram situates the learned threshold τ_AE within the empirical error distribution. The bar chart summarizes an approximate MLP interpretability signal combining gradient magnitude with respect to inputs and first-layer weight magnitudes across embedding dimensions (not a CNN Grad-CAM map, but a standard post-hoc attribution for MLPs on fixed embeddings).
+PCA and t-SNE projections of BirdNET embeddings visualize class structure and highlight autoencoder-rejected points relative to bird and noise labels. The reconstruction-error histogram situates the learned threshold τ_AE within the empirical error distribution. Confusion matrix heatmaps show per-class accuracy for all three systems. The bar chart summarizes an approximate MLP interpretability signal combining gradient magnitude with respect to inputs and first-layer weight magnitudes across embedding dimensions (not a CNN Grad-CAM map, but a standard post-hoc attribution for MLPs on fixed embeddings).
 """
     return text.strip()
 
@@ -180,6 +199,9 @@ def main() -> None:
     with open(results_dir / "statistical_tests.json", "w", encoding="utf-8") as f:
         json.dump(stats_payload, f, indent=2)
 
+    # Load heuristic overrides from config
+    heuristic_overrides = cfg.get("research", {}).get("heuristics", None)
+
     err_report = mine_and_copy(
         y_true,
         pred_b,
@@ -193,6 +215,7 @@ def main() -> None:
         project_root,
         err_dir,
         top_k=args.top_k,
+        heuristic_overrides=heuristic_overrides,
     )
     err_full = {
         **err_report,
@@ -203,6 +226,8 @@ def main() -> None:
 
     # Path proxy: noise routed folder in source path
     path_proxy = np.array(["/noise/" in (r.get("source_file") or "").replace("\\\\", "/") for r in rows])
+
+    auc_results: dict = {}
 
     if not args.skip_plots:
         ae_cfg = cfg.get("autoencoder", {})
@@ -225,6 +250,44 @@ def main() -> None:
 
         plot_ae_histogram(recon_err, tau, plots_dir / "ae_error_distribution.png")
 
+        # Confusion matrix heatmaps (new)
+        plot_confusion_matrix_heatmap(
+            y_true,
+            {
+                "BirdNET Baseline": pred_b,
+                "MLP Only": pred_m,
+                "MLP + AE Gate": pred_a,
+            },
+            plots_dir / "confusion_matrices.png",
+        )
+
+        # ROC and PR curves (new)
+        auc_results = plot_roc_pr_curves(
+            y_true,
+            {
+                "BirdNET Baseline": prob_b,
+                "MLP Only": prob_m,
+                "MLP + AE Gate": prob_a,
+            },
+            plots_dir / "roc_curves.png",
+            plots_dir / "pr_curves.png",
+        )
+
+        # Add AUC to benchmark payload
+        if auc_results:
+            bench_payload["auc_scores"] = auc_results
+            with open(results_dir / "benchmark_comparison.json", "w", encoding="utf-8") as f:
+                json.dump(bench_payload, f, indent=2)
+
+            # Also add to CSV rows
+            for row in csv_rows:
+                sys_name = row["system"]
+                for auc_name, auc_vals in auc_results.items():
+                    if auc_name.lower().replace(" ", "_") in sys_name.lower().replace(" ", "_"):
+                        row["roc_auc"] = auc_vals.get("roc_auc", "")
+                        row["pr_auc"] = auc_vals.get("pr_auc", "")
+            _write_benchmark_csv(results_dir / "benchmark_table.csv", csv_rows)
+
         chkpt_dir = Path(cfg["training"]["checkpoint_dir"])
         if not chkpt_dir.is_absolute():
             chkpt_dir = project_root / chkpt_dir
@@ -238,7 +301,9 @@ def main() -> None:
         model.eval()
         plot_feature_importance_mlp(model, embs, device, plots_dir / "feature_importance.png")
 
-    snippets = _report_snippets(bench_payload, stats_payload, int(len(y_true)), args.threshold)
+    snippets = _report_snippets(
+        bench_payload, stats_payload, int(len(y_true)), args.threshold, auc_results
+    )
     with open(results_dir / "report_snippets.txt", "w", encoding="utf-8") as f:
         f.write(snippets)
 
@@ -247,6 +312,8 @@ def main() -> None:
     print(f"Wrote stats      → {results_dir / 'statistical_tests.json'}")
     print(f"Wrote errors     → {results_dir / 'error_analysis.json'}")
     print(f"Wrote report text → {results_dir / 'report_snippets.txt'}")
+    if not args.skip_plots:
+        print(f"Wrote plots      → {plots_dir}/")
 
 
 if __name__ == "__main__":

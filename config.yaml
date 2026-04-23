@@ -68,7 +68,7 @@ bird_rescue:
 noise_segregation:
   v2:
     subframe_duration_s: 0.5
-    vote_threshold: 0.3      # subframe votes noise if S >= this (lower → more noise votes)
+    vote_threshold: 0.5      # subframe votes noise if S >= this (0.5 = balanced; 0.3 was too aggressive)
     majority_tie: bird       # bird | noise (when 3-3 vote)
     target_rms_db: -20.0
     w_zcr: 0.25
@@ -84,6 +84,10 @@ noise_segregation:
     insect_lag_min_hz: 200.0
     insect_lag_max_hz: 2000.0
     insect_peak_thresh: 0.35
+    # Bird guard: prevents bird calls from leaking into noise folder
+    bird_guard_enabled: true
+    harmonic_ratio_thresh: 0.3         # harmonic energy fraction; above → bird-like
+    spectral_peak_prominence_thresh: 3.0  # peak/median ratio; above → tonal (bird-like)
 
 # ── Embedding Model ────────────────────────────────────────
 # BirdNET V2.4 only — file must be named:
@@ -123,9 +127,10 @@ model:
 # Trained on bird-only embeddings (label=1); τ_AE from val bird error percentile.
 autoencoder:
   latent_dim: 128
-  threshold_percentile: 95   # τ_AE = this percentile of val bird reconstruction MSE
+  threshold_percentile: 99   # τ_AE = this percentile of val bird reconstruction MSE
   epochs: 30
   learning_rate: 0.001
+  weight_decay: 0.00001     # L2 regularization for autoencoder optimizer
   batch_size: 64
   checkpoint_path: ./checkpoints/autoencoder.pt
 
@@ -176,3 +181,16 @@ mining:
 # ── Evaluation (evaluate.py) ────────────────────────────────
 evaluation:
   results_dir: ./results      # metrics.json and optional plots
+  batch_size: 64              # batch size for evaluation and research inference
+
+# ── Research heuristics (error tagging) ────────────────────
+research:
+  heuristics:
+    zcr_insect_thresh: 0.25
+    flatness_insect_thresh: 0.15
+    low_freq_wind_ratio_thresh: 0.55
+    faint_rms_db_thresh: -35.0
+    periodicity_lag_min: 200
+    periodicity_lag_max: 3000
+    periodicity_peak_ratio_thresh: 0.15
+    faint_periodic_rms_db_thresh: -32.0

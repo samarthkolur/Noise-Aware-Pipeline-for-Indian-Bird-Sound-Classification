@@ -52,6 +52,7 @@ def mine_and_copy(
     project_root: Path,
     out_dir: Path,
     top_k: int,
+    heuristic_overrides: Optional[Dict[str, float]] = None,
 ) -> Dict[str, Any]:
     """Select top-K FP/FN/OOD/recovered; copy WAVs; run heuristics."""
     out_dir = Path(out_dir)
@@ -108,7 +109,9 @@ def mine_and_copy(
                     meta["copy_error"] = str(e)
             else:
                 meta["copy_error"] = "file not found"
-            meta["heuristics"] = tag_segment(p) if p.is_file() else {}
+            meta["heuristics"] = (
+                tag_segment(p, overrides=heuristic_overrides) if p.is_file() else {}
+            )
             items.append(meta)
         return items
 

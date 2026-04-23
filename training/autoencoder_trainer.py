@@ -115,7 +115,8 @@ class AutoencoderTrainer:
             input_dim=emb_dim, latent_dim=self.latent_dim
         ).to(self.device)
 
-        self.optimizer = Adam(self.model.parameters(), lr=self.lr, weight_decay=1e-5)
+        ae_weight_decay = float(ae_cfg.get("weight_decay", 1e-5))
+        self.optimizer = Adam(self.model.parameters(), lr=self.lr, weight_decay=ae_weight_decay)
         self.scheduler = CosineAnnealingLR(self.optimizer, T_max=self.epochs)
         self.loss_fn = nn.MSELoss()
 

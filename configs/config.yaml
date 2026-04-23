@@ -51,7 +51,7 @@ bird_rescue:
 noise_segregation:
   v2:
     subframe_duration_s: 0.5
-    vote_threshold: 0.3
+    vote_threshold: 0.5
     majority_tie: bird
     target_rms_db: -20.0
     w_zcr: 0.25
@@ -67,6 +67,9 @@ noise_segregation:
     insect_lag_min_hz: 200.0
     insect_lag_max_hz: 2000.0
     insect_peak_thresh: 0.35
+    bird_guard_enabled: true
+    harmonic_ratio_thresh: 0.3
+    spectral_peak_prominence_thresh: 3.0
 
 embedding:
   model_name: birdnet
@@ -95,9 +98,10 @@ model:
 
 autoencoder:
   latent_dim: 128
-  threshold_percentile: 95
+  threshold_percentile: 99
   epochs: 30
   learning_rate: 0.001
+  weight_decay: 0.00001
   batch_size: 64
   checkpoint_path: ./checkpoints/autoencoder.pt
 
@@ -142,3 +146,15 @@ mining:
 
 evaluation:
   results_dir: ./results
+  batch_size: 64
+
+research:
+  heuristics:
+    zcr_insect_thresh: 0.25
+    flatness_insect_thresh: 0.15
+    low_freq_wind_ratio_thresh: 0.55
+    faint_rms_db_thresh: -35.0
+    periodicity_lag_min: 200
+    periodicity_lag_max: 3000
+    periodicity_peak_ratio_thresh: 0.15
+    faint_periodic_rms_db_thresh: -32.0

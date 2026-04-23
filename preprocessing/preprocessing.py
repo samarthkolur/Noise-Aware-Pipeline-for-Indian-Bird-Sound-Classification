@@ -29,11 +29,6 @@ logger = get_logger(__name__)
 
 NOISE_FOLDER_NAME = "noise"  # must match dataset.NOISE_LABEL_NAME for binary labels
 
-# ── Defaults ────────────────────────────────────────────────
-TARGET_SR = 48_000
-SEGMENT_DURATION_S = 3.0
-RMS_THRESHOLD_DB = -40.0  # segments quieter than this are considered silent
-
 
 # ── Metadata dataclass ──────────────────────────────────────
 @dataclass
@@ -80,20 +75,18 @@ class Preprocessor:
     """
 
     def __init__(self, cfg: dict) -> None:
-        audio_cfg = cfg.get("audio", {})
+        audio_cfg = cfg["audio"]
         silence_cfg = cfg.get("silence_removal", {})
 
-        self.target_sr: int = audio_cfg.get("sample_rate", TARGET_SR)
-        self.segment_duration: float = audio_cfg.get(
-            "segment_duration_s", SEGMENT_DURATION_S
-        )
-        self.mono: bool = audio_cfg.get("mono", True)
+        self.target_sr: int = int(audio_cfg["sample_rate"])
+        self.segment_duration: float = float(audio_cfg["segment_duration_s"])
+        self.mono: bool = bool(audio_cfg.get("mono", True))
 
         # Silence removal
-        self.silence_removal_enabled: bool = silence_cfg.get("enabled", True)
-        self.rms_threshold_db: float = silence_cfg.get(
-            "rms_threshold_db", RMS_THRESHOLD_DB
-        )
+        self.silence_removal_enabled: bool = bool(silence_cfg.get("enabled", True))
+        self.rms_threshold_db: float = float(silence_cfg.get(
+            "rms_threshold_db", -40.0
+        ))
 
         # Derived
         self.segment_samples: int = int(self.target_sr * self.segment_duration)

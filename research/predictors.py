@@ -44,7 +44,7 @@ def mlp_predictions(
     model.eval()
 
     probs_out = np.zeros(len(embs), dtype=np.float64)
-    bs = 128
+    bs = int(cfg.get("evaluation", {}).get("batch_size", 64))
     with torch.no_grad():
         for start in range(0, len(embs), bs):
             x = torch.from_numpy(embs[start : start + bs]).to(device, non_blocking=True)
@@ -84,7 +84,7 @@ def ae_mlp_predictions(
     pred = np.zeros(n, dtype=np.int64)
     ood = np.zeros(n, dtype=bool)
 
-    bs = 128
+    bs = int(cfg.get("evaluation", {}).get("batch_size", 64))
     with torch.no_grad():
         for start in range(0, n, bs):
             x = torch.from_numpy(embs[start : start + bs]).to(device, non_blocking=True)

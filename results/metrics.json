@@ -1,45 +1,45 @@
 {
   "pipeline": "ae_ood_gate_then_mlp",
   "eval_split": "test",
-  "tau_ae": 0.1628865972161293,
+  "tau_ae": 0.1697546190023422,
   "autoencoder_threshold_meta": {
-    "tau_ae": 0.1628865972161293,
-    "threshold_percentile": 95,
+    "tau_ae": 0.1697546190023422,
+    "threshold_percentile": 99,
     "embedding_dim": 1024,
     "latent_dim": 128,
     "seed": 42,
-    "best_val_mse": 0.09475106559693813,
-    "best_epoch": 29,
+    "best_val_mse": 0.0794023771000945,
+    "best_epoch": 28,
     "val_bird_reconstruction_error_distribution": {
-      "n": 730,
-      "min": 0.014443540945649147,
-      "max": 0.24063053727149963,
-      "mean": 0.09475017454577227,
-      "std": 0.03776129881559882,
+      "n": 1469,
+      "min": 0.010588602162897587,
+      "max": 0.19993969798088074,
+      "mean": 0.07941250924472402,
+      "std": 0.0316989102132812,
       "percentiles": {
-        "50": 0.09002047404646873,
-        "90": 0.14611878097057343,
-        "95": 0.1628865972161293,
-        "99": 0.1920347946882248
+        "50": 0.07482131570577621,
+        "90": 0.12292920351028443,
+        "95": 0.13739365041255944,
+        "99": 0.1697546190023422
       }
     }
   },
   "ood_gating": {
-    "n_rejected": 106,
-    "rejection_rate": 0.1054726368159204,
-    "n_passed_to_mlp": 899,
-    "pct_rejected_before_classifier": 10.547263681592039
+    "n_rejected": 14,
+    "rejection_rate": 0.013930348258706468,
+    "n_passed_to_mlp": 991,
+    "pct_rejected_before_classifier": 1.3930348258706469
   },
   "binary_eval_valid": true,
-  "dataset_noise_count": 5176,
-  "dataset_bird_count": 4868,
-  "eval_noise_count": 518,
-  "eval_bird_count": 487,
-  "test_noise_count": 518,
-  "test_bird_count": 487,
+  "dataset_noise_count": 254,
+  "dataset_bird_count": 9790,
+  "eval_noise_count": 25,
+  "eval_bird_count": 980,
+  "test_noise_count": 25,
+  "test_bird_count": 980,
   "gated_three_class": {
-    "accuracy": 0.6258706467661691,
-    "abstention_rate": 0.2716417910447761,
+    "accuracy": 0.9830845771144279,
+    "abstention_rate": 0.006965174129353234,
     "confusion_matrix_labels": [
       0,
       1,
@@ -47,14 +47,14 @@
     ],
     "confusion_matrix": [
       [
-        343,
-        45,
-        130
+        20,
+        1,
+        4
       ],
       [
-        58,
-        286,
-        143
+        9,
+        968,
+        3
       ],
       [
         0,
@@ -64,37 +64,37 @@
     ]
   },
   "gated_binary_excluding_uncertain": {
-    "acc": 0.8592896174863388,
-    "prec": 0.8640483383685801,
-    "rec": 0.8313953488372093,
-    "f1": 0.8474074074074074,
-    "tn": 343,
-    "fp": 45,
-    "fn": 58,
-    "tp": 286,
-    "fpr": 0.11597938144329897,
-    "fnr": 0.1686046511627907
+    "acc": 0.9899799599198397,
+    "prec": 0.9989680082559339,
+    "rec": 0.9907881269191402,
+    "f1": 0.9948612538540597,
+    "tn": 20,
+    "fp": 1,
+    "fn": 9,
+    "tp": 968,
+    "fpr": 0.047619047619047616,
+    "fnr": 0.009211873080859774
   },
   "gated_routing_uncertain_as_bird": {
     "low_threshold": 0.3,
     "high_threshold": 0.7,
     "description": "OOD\u2192noise; else pred_bird = 1 iff sigmoid(logit) > low_threshold",
-    "acc": 0.7681592039800995,
-    "prec": 0.7102649006622517,
-    "rec": 0.8809034907597536,
-    "f1": 0.7864344637946837,
-    "tn": 343,
-    "fp": 175,
-    "fn": 58,
-    "tp": 429,
-    "fpr": 0.33783783783783783,
-    "fnr": 0.11909650924024641
+    "acc": 0.9860696517412936,
+    "prec": 0.9948770491803278,
+    "rec": 0.9908163265306122,
+    "f1": 0.9928425357873211,
+    "tn": 20,
+    "fp": 5,
+    "fn": 9,
+    "tp": 971,
+    "fpr": 0.2,
+    "fnr": 0.009183673469387756
   },
   "reconstruction_error": {
-    "bird_mean": 0.0951862861507513,
-    "bird_std": 0.0398822121264368,
-    "noise_mean": 0.11924703318165421,
-    "noise_std": 0.04496909493797521,
-    "threshold_tau_ae": 0.1628865972161293
+    "bird_mean": 0.07920836643886049,
+    "bird_std": 0.03225864009193771,
+    "noise_mean": 0.07606919441372156,
+    "noise_std": 0.06639427230190925,
+    "threshold_tau_ae": 0.1697546190023422
   }
 }
