@@ -42,9 +42,40 @@ def _resolve_config_path() -> Path:
     return PROJECT_ROOT / "config.yaml"
 
 
+def _resolve_relative_paths(cfg: dict[str, Any]) -> dict[str, Any]:
+    """Resolve all relative paths in the config to be absolute from PROJECT_ROOT.
+
+    This is critical because Streamlit's CWD is ``app/``, but config paths
+    like ``./checkpoints`` are relative to the project root.
+    """
+    import copy
+    cfg = copy.deepcopy(cfg)
+
+    # Keys known to contain filesystem paths
+    path_keys = {
+        ("data", "raw_dir"),
+        ("data", "processed_dir"),
+        ("data", "embeddings_dir"),
+        ("data", "output_dir"),
+        ("training", "checkpoint_dir"),
+        ("training", "log_dir"),
+        ("inference", "checkpoint"),
+        ("autoencoder", "checkpoint_path"),
+        ("evaluation", "results_dir"),
+    }
+    for section, key in path_keys:
+        if section in cfg and key in cfg[section]:
+            val = cfg[section][key]
+            if isinstance(val, str) and not Path(val).is_absolute():
+                cfg[section][key] = str((PROJECT_ROOT / val).resolve())
+
+    return cfg
+
+
 @st.cache_data(show_spinner=False)
 def load_pipeline_config(config_path_str: str) -> dict[str, Any]:
-    return load_config(config_path_str)
+    cfg = load_config(config_path_str)
+    return _resolve_relative_paths(cfg)
 
 
 @st.cache_resource(show_spinner=False)
@@ -110,8 +141,9 @@ def _materialize_upload(upload_name: str, raw_bytes: bytes, out_dir: Path) -> Pa
         return src
 
     try:
-        waveform, sr = torchaudio.load(str(src))
-    except Exception as e:  # pragma: no cover - runtime dependency
+        waveform_np, sr = sf.read(str(src), always_2d=True)
+        waveform = torch.from_numpy(waveform_np).transpose(0, 1)
+    except Exception as e:
         raise RuntimeError(f"Could not decode {suffix}: {e}") from e
 
     if waveform.shape[0] > 1:
@@ -161,86 +193,62 @@ def _spectrogram_figure(path: Path) -> plt.Figure:
     return fig
 
 
-def _segment_summary_rows(metas: list[SegmentMeta]) -> list[dict[str, Any]]:
+def _raw_vote_decision(
+    noise_votes: int | None,
+    total: int | None,
+    majority_tie: str = "bird",
+) -> str:
+    """Compute the raw majority-vote V2 decision from vote counts.
+
+    This bypasses the bird guard override that bakes into ``v2_label``.
+    The raw votes are the ground truth of the subframe scoring.
+    """
+    if noise_votes is None or total is None or total == 0:
+        return "n/a"
+    half = total // 2
+    if noise_votes > half:
+        return "noise"
+    if noise_votes < half:
+        return "bird"
+    # Tie (e.g. 3/6) — use config majority_tie
+    return majority_tie
+
+
+def _segment_summary_rows(
+    metas: list[SegmentMeta],
+    majority_tie: str = "bird",
+    pred_map: dict[int, dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for meta in metas:
-        rows.append(
-            {
-                "segment": meta.segment_index,
-                "time_window": f"{meta.start_sec:.2f}-{meta.end_sec:.2f}",
-                "rms_db": meta.rms_db,
-                "v2_label": meta.v2_label,
-                "v2_score": meta.v2_mean_score,
-                "votes": (
-                    f"{meta.v2_noise_subframe_votes}/{meta.v2_total_subframes}"
-                    if meta.v2_noise_subframe_votes is not None and meta.v2_total_subframes is not None
-                    else None
-                ),
-                "output_path": meta.output_path,
-            }
+        raw_decision = _raw_vote_decision(
+            meta.v2_noise_subframe_votes, meta.v2_total_subframes, majority_tie
         )
+        row: dict[str, Any] = {
+            "segment": meta.segment_index,
+            "time_window": f"{meta.start_sec:.2f}-{meta.end_sec:.2f}",
+            "rms_db": meta.rms_db,
+            "v2_label (bird-guard)": meta.v2_label,
+            "v2_score": meta.v2_mean_score,
+            "noise_votes": (
+                f"{meta.v2_noise_subframe_votes}/{meta.v2_total_subframes}"
+                if meta.v2_noise_subframe_votes is not None and meta.v2_total_subframes is not None
+                else None
+            ),
+            "raw_vote_decision": raw_decision,
+        }
+        if pred_map and meta.segment_index in pred_map:
+            pred = pred_map[meta.segment_index]
+            row["final_label"] = pred["label"]
+            row["mlp_prob"] = pred.get("prob")
+            row["ae_error"] = pred.get("recon_error")
+            row["routed_by"] = pred.get("routed_by", "")
+        row["output_path"] = meta.output_path
+        rows.append(row)
     return rows
 
 
-@torch.no_grad()
-def _classify_segment(
-    *,
-    embedding_np: np.ndarray,
-    classifier: torch.nn.Module,
-    autoencoder: torch.nn.Module,
-    device: torch.device,
-    low_threshold: float,
-    high_threshold: float,
-    recon_threshold: float,
-) -> dict[str, Any]:
-    emb = torch.from_numpy(embedding_np).unsqueeze(0).to(device)
-
-    reconstructed, _ = autoencoder(emb)
-    recon_error = float(
-        EmbeddingAutoencoder.compute_reconstruction_error(emb, reconstructed).item()
-    )
-
-    # Diagnostic logging
-    import logging
-    _log = logging.getLogger("streamlit_inference")
-
-    if recon_error > recon_threshold:
-        _log.info(
-            f"[AE REJECT] recon_error={recon_error:.6f} > τ_AE={recon_threshold:.6f} → Noise"
-        )
-        return {
-            "label": "Noise",
-            "prob": 0.0,
-            "recon_error": recon_error,
-            "ae_rejected": True,
-        }
-
-    logits = classifier(emb)
-    if logits.ndim > 1:
-        logits = logits.squeeze(-1)
-    prob = float(torch.sigmoid(logits).item())
-
-    # MLP binary convention: prob = P(bird).
-    # high_threshold → confident bird, low_threshold → confident noise
-    if prob >= high_threshold:
-        label = "Bird"
-    elif prob <= low_threshold:
-        label = "Noise"
-    else:
-        label = "Uncertain"
-
-    _log.info(
-        f"[MLP] logit={float(logits.item()):.4f} prob(bird)={prob:.4f} "
-        f"thresholds=[{low_threshold}, {high_threshold}] "
-        f"recon_err={recon_error:.6f} → {label}"
-    )
-
-    return {
-        "label": label,
-        "prob": prob,
-        "recon_error": recon_error,
-        "ae_rejected": False,
-    }
+# _classify_segment has been removed in favor of Predictor.predict_file
 
 
 def _render_segment_group(title: str, items: list[dict[str, Any]]) -> None:
@@ -252,16 +260,23 @@ def _render_segment_group(title: str, items: list[dict[str, Any]]) -> None:
     for idx, item in enumerate(items):
         meta: SegmentMeta = item["meta"]
         pred = item["pred"]
+        routed_by = pred.get("routed_by", "")
+        votes_str = (
+            f"{meta.v2_noise_subframe_votes}/{meta.v2_total_subframes}"
+            if meta.v2_noise_subframe_votes is not None else "-"
+        )
         parts = [
             f"Segment {meta.segment_index}",
             f"{meta.start_sec:.2f}-{meta.end_sec:.2f}s",
             f"RMS {meta.rms_db:.1f} dB",
-            f"V2 {meta.v2_label or '-'}",
-            f"MLP {pred['label']}",
+            f"votes {votes_str}",
+            f"→ {pred['label']}",
             f"p={pred['prob']:.3f}",
         ]
-        if pred["recon_error"] is not None:
+        if pred.get("recon_error") is not None:
             parts.append(f"AE={pred['recon_error']:.5f}")
+        if routed_by:
+            parts.append(f"via {routed_by}")
         with st.expander(" | ".join(parts), expanded=(idx == 0)):
             wav_path = Path(meta.output_path)
             if wav_path.is_file():
@@ -355,6 +370,7 @@ This demo follows the report architecture end-to-end:
         st.session_state["upload_key"] = upload_key
         st.session_state.pop("segment_metas", None)
         st.session_state.pop("segment_predictions", None)
+        st.session_state["preprocessing_run"] = False
 
     source_dir = _work_dir() / upload_key.replace(":", "_")
     source_path = _materialize_upload(selected.name, raw_bytes, source_dir)
@@ -386,22 +402,40 @@ This demo follows the report architecture end-to-end:
             with st.spinner("Segmenting audio and applying Noise Segregation V2..."):
                 metas = preprocessor.process_file(source_path, seg_out, species="uploaded_demo")
             st.session_state["segment_metas"] = metas
+            st.session_state["preprocessing_run"] = True
             st.session_state.pop("segment_predictions", None)
 
     metas: list[SegmentMeta] = st.session_state.get("segment_metas", [])
+    has_run = st.session_state.get("preprocessing_run", False)
+    
     if not metas:
         with results_tab:
-            st.caption("Run preprocessing first to generate segments.")
+            if has_run:
+                st.info("Preprocessing complete, but 0 segments were kept. All segments were filtered out by the Silence Gate or Noise Reduction (RMS too low). If you uploaded pure stationary noise, this is the expected behavior.")
+            else:
+                st.caption("Run preprocessing first to generate segments.")
         return
 
-    v2_bird = [m for m in metas if m.v2_label == "bird"]
-    v2_noise = [m for m in metas if m.v2_label == "noise"]
+    majority_tie = cfg.get("noise_segregation", {}).get("v2", {}).get("majority_tie", "bird")
+    raw_bird = [
+        m for m in metas
+        if _raw_vote_decision(m.v2_noise_subframe_votes, m.v2_total_subframes, majority_tie) == "bird"
+    ]
+    raw_noise = [
+        m for m in metas
+        if _raw_vote_decision(m.v2_noise_subframe_votes, m.v2_total_subframes, majority_tie) == "noise"
+    ]
+    pred_map_for_table: dict[int, dict[str, Any]] = st.session_state.get("segment_predictions", {})
     with results_tab:
         s1, s2, s3 = st.columns(3)
         s1.metric("Segments written", len(metas))
-        s2.metric("V2 bird-like", len(v2_bird))
-        s3.metric("V2 noise-like", len(v2_noise))
-        st.dataframe(_segment_summary_rows(metas), use_container_width=True, hide_index=True)
+        s2.metric("V2 bird (raw votes)", len(raw_bird))
+        s3.metric("V2 noise (raw votes)", len(raw_noise))
+        st.dataframe(
+            _segment_summary_rows(metas, majority_tie, pred_map_for_table),
+            use_container_width=True,
+            hide_index=True,
+        )
 
     device = torch.device("cpu")
     try:
@@ -432,25 +466,25 @@ This demo follows the report architecture end-to-end:
         )
 
         if st.button("Run full routing demo"):
-            classifier = classifier.to(device)
-            ae_model = autoencoder.to(device)
-            preds: dict[int, dict[str, Any]] = {}
-            progress = st.progress(0.0, text="Embedding and classifying segments...")
+            from inference.predictor import Predictor
+            predictor = Predictor(cfg)
 
-            for i, meta in enumerate(sorted(metas, key=lambda x: x.segment_index), start=1):
-                waveform, sr = _load_wav_mono_np(Path(meta.output_path))
-                embedding_np = encoder.encode(waveform, sr)
-                pred = _classify_segment(
-                    embedding_np=embedding_np,
-                    classifier=classifier,
-                    autoencoder=ae_model,
-                    device=device,
-                    low_threshold=float(cfg["inference"]["low_threshold"]),
-                    high_threshold=float(cfg["inference"]["high_threshold"]),
-                    recon_threshold=recon_threshold,
-                )
-                preds[meta.segment_index] = pred
-                progress.progress(i / max(len(metas), 1), text=f"Processed {i}/{len(metas)} segments")
+            progress = st.progress(0.0, text="Running Predictor pipeline...")
+            
+            # Use Predictor on the source file to guarantee perfect tracing.
+            # (In-memory predictions to avoid side effects)
+            predictor_results = predictor.predict_file(source_path, persist_outputs=False)
+            
+            preds: dict[int, dict[str, Any]] = {}
+            for i, res in enumerate(predictor_results):
+                preds[res["segment_index"]] = {
+                    "label": res["decision"].capitalize(),
+                    "prob": res["confidence"],
+                    "recon_error": res["recon_error"],
+                    "ae_rejected": res["recon_error_rejected"],
+                    "routed_by": res["routed_by"],
+                }
+                progress.progress((i + 1) / max(len(predictor_results), 1), text=f"Processed {i+1}/{len(predictor_results)} segments")
 
             st.session_state["segment_predictions"] = preds
             progress.empty()
@@ -461,7 +495,7 @@ This demo follows the report architecture end-to-end:
 
     grouped = {"Bird": [], "Noise": [], "Uncertain": []}
     for meta in metas:
-        pred = pred_map.get(meta.segment_index, {"label": "Uncertain", "prob": 0.0})
+        pred = pred_map.get(meta.segment_index, {"label": "Uncertain", "prob": 0.0, "routed_by": ""})
         grouped[pred["label"]].append({"meta": meta, "pred": pred})
 
     with results_tab:
