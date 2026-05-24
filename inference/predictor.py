@@ -153,8 +153,21 @@ class Predictor:
                 self.device, non_blocking=True
             )
 
-            if self.binary:
-                decision, top_species, prob, recon_error, ae_rejected = (
+            if meta.is_silent:
+                # Segment was below RMS threshold — routed to noise by silence gate
+                decision, top_species, prob, recon_error, ae_rejected, routed_by = (
+                    "noise", "noise", 0.0, 0.0, False, "SILENCE_GATE"
+                )
+            elif meta.pipeline_mode in ("filtered", "full") and meta.v2_label == "noise" and not meta.v2_rescued_to_bird:
+                decision, top_species, prob, recon_error, ae_rejected, routed_by = (
+                    "noise", "noise", 0.0, 0.0, False, "V2_NOISE"
+                )
+            elif meta.v2_rescued_to_bird:
+                decision, top_species, prob, recon_error, ae_rejected, routed_by = (
+                    "bird", "bird", meta.rescue_bird_prob or 1.0, 0.0, False, "BIRD_RESCUE"
+                )
+            elif self.binary:
+                decision, top_species, prob, recon_error, ae_rejected, routed_by = (
                     decision_binary_gated_single(
                         self.autoencoder,
                         self.classifier,
@@ -168,9 +181,15 @@ class Predictor:
                 recon_error = self._compute_recon_error(emb_pt)
                 ae_rejected = recon_error > self.recon_threshold
                 if ae_rejected:
-                    decision, top_species, prob = "noise", "noise", 0.0
+                    decision, top_species, prob, routed_by = "noise", "noise", 0.0, "AE_REJECT"
                 else:
                     decision, top_species, prob = self._classify_segment(emb_pt)
+                    if decision == "bird":
+                        routed_by = "MLP_HIGH_CONF"
+                    elif decision == "noise":
+                        routed_by = "MLP_LOW_CONF"
+                    else:
+                        routed_by = "UNCERTAIN"
 
             res: Dict = {
                 "source_file": meta.source_file,
@@ -184,6 +203,7 @@ class Predictor:
                 "threshold_used": self.conf_thresh,
                 "recon_error": float(recon_error),
                 "recon_error_rejected": ae_rejected,
+                "routed_by": routed_by,
                 "segment_waveform": wf.astype(np.float32, copy=False),
             }
 

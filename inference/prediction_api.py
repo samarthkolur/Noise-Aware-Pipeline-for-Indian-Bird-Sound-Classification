@@ -119,7 +119,7 @@ def decision_binary_gated_single(
     threshold: float,
     high_threshold: float,
     low_threshold: float,
-) -> Tuple[str, str, float, float, bool]:  # decision, species, prob, recon_err, ae_rejected
+) -> Tuple[str, str, float, float, bool, str]:  # decision, species, prob, recon_err, ae_rejected, routed_by
     """Single-segment binary pipeline: AE gate → optional MLP → three-band route.
 
     Args:
@@ -134,11 +134,19 @@ def decision_binary_gated_single(
     )
     r = float(recon_err.item())
     if bool(ood_mask.item()):
-        return "noise", "noise", 0.0, r, True
+        return "noise", "noise", 0.0, r, True, "AE_REJECT"
     probs = predict_embeddings_mlp(classifier, emb_1b, binary=True)
     p = float(probs.item())
     decision = route_probs_three_band(
         p, high_threshold=high_threshold, low_threshold=low_threshold
     )
     species = "bird" if decision == "bird" else ("noise" if decision == "noise" else "uncertain")
-    return decision, species, p, r, False
+    
+    if decision == "bird":
+        routed_by = "MLP_HIGH_CONF"
+    elif decision == "noise":
+        routed_by = "MLP_LOW_CONF"
+    else:
+        routed_by = "UNCERTAIN"
+        
+    return decision, species, p, r, False, routed_by

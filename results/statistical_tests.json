@@ -1,29 +1,29 @@
 {
   "baseline_vs_mlp": {
     "comparison": "MLP_only vs BirdNET_baseline",
-    "mean_accuracy_delta": 0.5588410991636799,
-    "n_samples": 10044,
+    "mean_accuracy_delta": 0.4558328659562535,
+    "n_samples": 7132,
     "paired_ttest": {
-      "statistic": 112.65561861448154,
+      "statistic": 76.9408152936012,
       "pvalue": 0.0
     },
     "wilcoxon_signed_rank": {
-      "statistic": 8430.0,
+      "statistic": 13072.0,
       "pvalue": 0.0
     },
     "interpretation_note": "p < 0.05 suggests a statistically significant difference in paired correctness."
   },
   "mlp_vs_mlp_ae": {
     "comparison": "MLP_plus_AE vs MLP_only",
-    "mean_accuracy_delta": -0.003783353245718837,
-    "n_samples": 10044,
+    "mean_accuracy_delta": -0.004066180594503646,
+    "n_samples": 7132,
     "paired_ttest": {
-      "statistic": -6.17580081370713,
-      "pvalue": 6.837823626587844e-10
+      "statistic": -5.395768517444728,
+      "pvalue": 7.042463183085484e-08
     },
     "wilcoxon_signed_rank": {
       "statistic": 0.0,
-      "pvalue": 7.074463098970675e-10
+      "pvalue": 7.237829871739995e-08
     },
     "interpretation_note": "p < 0.05 suggests a statistically significant difference in paired correctness."
   }

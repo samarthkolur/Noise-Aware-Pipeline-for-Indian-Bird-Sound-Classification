@@ -2,7 +2,7 @@
 
 A production-grade bioacoustic system that classifies Indian bird calls from noisy field recordings using a **noise-aware preprocessing pipeline**, **BirdNET V2.4 embeddings**, an **autoencoder-based OOD rejection gate**, and a **focal-loss MLP classifier** with three-band routing.
 
-> **Key Result:** On 10,044 segments (53 species + environmental noise), the pipeline achieves **99.9% accuracy** and **F1=0.999**, reducing BirdNET's false negative rate from **57.4% → 0.04%** while maintaining a lower false positive rate (**1.97% vs 2.76%**).
+> **Key Result:** On 7,132 segments (53 species + environmental noise), the pipeline achieves **99.8% accuracy** and **F1=0.999**, reducing BirdNET's false negative rate from **47.4% → 0.09%** while maintaining competitive false positive rates.
 
 ---
 
@@ -33,7 +33,7 @@ graph TB
     subgraph PREPROCESS["🔧 Preprocessing"]
         B["Resample to 48 kHz + Mono"]
         C["Segment into 3s Clips"]
-        D["RMS Silence Rejection<br/>< -40 dB → discard"]
+        D["RMS Silence Gate<br/>< -40 dB → route to noise"]
         E["Noise Segregation V2<br/>6 subframes × 0.5s scoring"]
         F{"Bird Guard<br/>Harmonic + Spectral<br/>Peak Check"}
         G["Bird Rescue<br/>MLP re-check on V2 noise"]
@@ -139,8 +139,8 @@ graph LR
 ### 1. Audio Conditioning
 Raw field recordings are resampled to **48 kHz mono** (BirdNET V2.4 requirement) and sliced into non-overlapping **3-second segments**.
 
-### 2. Silence Rejection
-An RMS energy gate discards segments below **-40 dB**, removing dead air and very faint noise floors.
+### 2. Silence Gate
+An RMS energy gate routes segments below **-40 dB** to the **noise** bucket (tagged `SILENCE_GATE`), keeping them visible for auditing rather than silently discarding them.
 
 ### 3. Noise Segregation V2
 Each 3s segment is divided into **6 subframes** (0.5s each). Each subframe is scored using a weighted combination of:
@@ -155,12 +155,14 @@ Each 3s segment is divided into **6 subframes** (0.5s each). Each subframe is sc
 
 A **majority vote** across subframes determines if the segment is bird-like or noise-like.
 
-### 4. Bird Guard
+### 4. Bird Guard + Pure-Tone Discriminator
 Before routing a segment to noise, a **spectral bird guard** checks for:
-- **Harmonic structure** (harmonic ratio > 0.3) — birds produce harmonic overtones
-- **Spectral peak prominence** (peak/median > 3.0) — birds have tonal peaks
+- **Harmonic structure** (harmonic ratio > 0.8) — birds produce harmonic overtones
+- **Spectral peak prominence** (peak/median > 4.0) — birds have tonal peaks
 
-This prevents bird calls from leaking into the noise folder.
+A **pure-tone discriminator** then vetoes artificial signals (sine waves, electronic tones) by checking peak-frequency stationarity and spectral flux — real bird calls modulate over time, while synthetic tones are static.
+
+This prevents bird calls from leaking into the noise folder while also blocking artificial tone false positives.
 
 ### 5. Bird Rescue
 Segments labeled as noise by V2 get a **second chance**: if a trained MLP gives P(bird) ≥ threshold, the segment is rescued back to its species folder.
@@ -172,7 +174,7 @@ Each processed segment is fed through **BirdNET V2.4** (TFLite), extracting **10
 A lightweight MLP (`1024 → 512 → 256 → 1`) with BatchNorm, ReLU, and Dropout classifies embeddings as bird (1) or noise (0). **Focal loss** (γ=2.0) handles class imbalance by down-weighting easy examples.
 
 ### 8. Autoencoder OOD Gate
-A bottleneck autoencoder (`1024 → 128 → 1024`) trained exclusively on **bird embeddings** learns the manifold of normal bird sounds. At inference:
+A bottleneck autoencoder (`1024 → 128 → 1024`) trained exclusively on **bird embeddings** learns the manifold of normal bird sounds. The loss function combines **MSE + cosine similarity penalty** (`loss = MSE + λ(1 - cos_sim)`) to improve structural discrimination. At inference:
 - **Low reconstruction error** → in-distribution → pass to MLP
 - **High reconstruction error** (> τ_AE) → out-of-distribution → reject as noise
 
@@ -280,7 +282,7 @@ Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/
 
 ### Prerequisites
 - Python 3.10+
-- ~4 GB disk space for iBC53 dataset + generated artifacts
+- ~5 GB disk space for iBC53 dataset + generated artifacts
 
 ### Installation
 
@@ -297,6 +299,22 @@ source .venv/bin/activate   # Linux/macOS
 # Install dependencies
 pip install -r requirements.txt
 ```
+
+### Dataset (iBC53)
+
+Download the iBC53 Indian Bird Call dataset from Kaggle:
+
+```bash
+pip install kagglehub
+python -c "
+import kagglehub
+path = kagglehub.dataset_download('arghyasahoo/ibc53-indian-bird-call-dataset')
+print('Path to dataset files:', path)
+"
+# Then copy/symlink the species folders into ./iBC53/
+```
+
+Alternatively, place your own audio data under `iBC53/<SpeciesName>/*.wav`.
 
 ### BirdNET V2.4 Model
 
@@ -385,15 +403,15 @@ graph LR
     A["Raw .wav"] --> B["48 kHz Mono"]
     B --> C["3s Segments"]
     C --> D{"RMS > -40 dB?"}
-    D -->|"No"| E["Discard<br/>(silence)"]
+    D -->|"No"| E["→ noise/<br/>(SILENCE_GATE)"]
     D -->|"Yes"| F["V2 Score<br/>6 subframes"]
-    F --> G{"Bird Guard<br/>Pass?"}
+    F --> G{"Bird Guard<br/>+ Tone Veto"}
     G -->|"Harmonic/Tonal"| H["→ species/"]
     G -->|"Noise-like"| I{"Bird Rescue<br/>MLP Check?"}
     I -->|"P(bird) ≥ τ"| H
     I -->|"P(bird) < τ"| J["→ noise/"]
 
-    style E fill:#ffebee
+    style E fill:#fff3e0
     style H fill:#e8f5e9
     style J fill:#fff3e0
 ```
@@ -499,23 +517,25 @@ python run_research_suite.py --config config.yaml --skip-tsne
 
 ## Results & Performance
 
-### Three-Way Benchmark (N=10,044 segments)
+### Three-Way Benchmark (N=7,132 segments)
 
 | Metric | BirdNET Baseline | Pipeline (MLP) | Pipeline + AE Gate |
 |--------|:---:|:---:|:---:|
-| **Accuracy** | 0.440 | **0.999** | 0.995 |
+| **Accuracy** | 0.542 | **0.998** | 0.994 |
 | **Precision** | **0.998** | 0.999 | 0.999 |
-| **Recall** | 0.427 | **1.000** | 0.996 |
-| **F1 Score** | 0.598 | **1.000** | 0.998 |
-| **FPR** | 0.028 | **0.020** | **0.020** |
-| **FNR** | 0.574 | **0.000** | 0.004 |
+| **Recall** | 0.526 | **0.999** | 0.995 |
+| **F1 Score** | 0.689 | **0.999** | 0.997 |
+| **FPR** | 0.024 | 0.035 | 0.035 |
+| **FNR** | 0.474 | **0.001** | 0.005 |
+| **ROC-AUC** | 0.764 | **0.992** | 0.988 |
+| **PR-AUC** | 0.991 | **0.999** | 0.999 |
 
 ### Key Findings
 
-- **BirdNET struggles with Indian species** — trained on global data, it only recognizes 42.7% of iBC53 birds (FNR=57.4%)
-- **The MLP eliminates false negatives** — fine-tuned on domain-specific embeddings, recall jumps to 99.96%
-- **The AE gate adds robustness** — catches out-of-distribution samples with minimal recall cost (0.4%)
-- **FPR improves for all pipeline variants** — 2.76% baseline → 1.97% pipeline (29% reduction)
+- **BirdNET struggles with Indian species** — trained on global data, it only recognizes 52.6% of iBC53 birds (FNR=47.4%)
+- **The MLP eliminates false negatives** — fine-tuned on domain-specific embeddings, recall jumps to 99.9%
+- **The AE gate adds robustness** — catches out-of-distribution samples with minimal recall cost (0.5%)
+- **Every segment is traceable** — routing provenance (`V2_NOISE`, `SILENCE_GATE`, `BIRD_RESCUE`, `AE_REJECT`, `MLP_HIGH_CONF`) is logged for full auditability
 
 ### Statistical Validation
 
@@ -542,6 +562,8 @@ noise_segregation:
   v2:
     vote_threshold: 0.5     # subframe noise vote threshold
     bird_guard_enabled: true # prevent bird leakage
+    harmonic_ratio_thresh: 0.8
+    spectral_peak_prominence_thresh: 4.0
 
 # Autoencoder OOD Gate
 autoencoder:

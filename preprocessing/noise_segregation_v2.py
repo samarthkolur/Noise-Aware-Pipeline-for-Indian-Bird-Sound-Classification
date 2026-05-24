@@ -103,8 +103,8 @@ class NoiseSegregationV2:
         insect_peak_thresh: float,
         # Bird guard parameters
         bird_guard_enabled: bool = True,
-        harmonic_ratio_thresh: float = 0.3,
-        spectral_peak_prominence_thresh: float = 3.0,
+        harmonic_ratio_thresh: float = 0.8,
+        spectral_peak_prominence_thresh: float = 4.0,
     ) -> None:
         self.sample_rate = sample_rate
         self.segment_duration_s = segment_duration_s
@@ -164,9 +164,9 @@ class NoiseSegregationV2:
             insect_lag_max_hz=float(v2.get("insect_lag_max_hz", 2000.0)),
             insect_peak_thresh=float(v2.get("insect_peak_thresh", 0.35)),
             bird_guard_enabled=bool(v2.get("bird_guard_enabled", True)),
-            harmonic_ratio_thresh=float(v2.get("harmonic_ratio_thresh", 0.3)),
+            harmonic_ratio_thresh=float(v2.get("harmonic_ratio_thresh", 0.8)),
             spectral_peak_prominence_thresh=float(
-                v2.get("spectral_peak_prominence_thresh", 3.0)
+                v2.get("spectral_peak_prominence_thresh", 4.0)
             ),
         )
 
@@ -337,6 +337,30 @@ class NoiseSegregationV2:
         prominence = peak_level / median_level
         return float(prominence)
 
+    def _is_pure_tone(self, x: np.ndarray) -> bool:
+        """Detect artificial pure tones (sine waves) which spoof the bird guard.
+        
+        Pure sine waves have a perfectly stationary peak frequency and very low
+        spectral flux (dynamic change) over time compared to biological calls.
+        """
+        x = np.asarray(x, dtype=np.float32).flatten()
+        if len(x) < 512:
+            return False
+
+        n_fft = min(2048, len(x))
+        S = np.abs(librosa.stft(x, n_fft=n_fft, hop_length=n_fft // 4))
+        
+        # 1. Peak stationarity
+        peak_bins = np.argmax(S, axis=0)
+        peak_var = float(np.var(peak_bins))
+        
+        # 2. Spectral flux
+        diff = np.diff(S, axis=1)
+        flux = float(np.mean(np.maximum(0, diff))) / (float(np.mean(S)) + 1e-10)
+        
+        # Artificial tones have zero variance in peak bin and very low flux
+        return peak_var < 1.0 and flux < 0.1
+
     def _bird_guard_check(self, x: np.ndarray) -> Tuple[bool, float, float]:
         """Check if segment has bird-like harmonic content.
 
@@ -353,6 +377,11 @@ class NoiseSegregationV2:
             hr >= self.harmonic_ratio_thresh
             or sp >= self.spectral_peak_prominence_thresh
         )
+        
+        # Veto: pure artificial tones are not birds
+        if is_bird_like and self._is_pure_tone(x):
+            is_bird_like = False
+            
         return is_bird_like, hr, sp
 
     # ── Per-subframe scoring ───────────────────────────────

@@ -1,6 +1,6 @@
 {
   "pipeline": "ae_ood_gate_then_mlp",
-  "eval_split": "full",
+  "eval_split": "test",
   "tau_ae": 0.1722127881646156,
   "autoencoder_threshold_meta": {
     "tau_ae": 0.1722127881646156,
@@ -25,21 +25,21 @@
     }
   },
   "ood_gating": {
-    "n_rejected": 43,
-    "rejection_rate": 0.0060291643297812674,
-    "n_passed_to_mlp": 7089,
-    "pct_rejected_before_classifier": 0.6029164329781267
+    "n_rejected": 9,
+    "rejection_rate": 0.012605042016806723,
+    "n_passed_to_mlp": 705,
+    "pct_rejected_before_classifier": 1.2605042016806722
   },
   "binary_eval_valid": true,
   "dataset_noise_count": 255,
   "dataset_bird_count": 6877,
-  "eval_noise_count": 255,
-  "eval_bird_count": 6877,
-  "test_noise_count": 255,
-  "test_bird_count": 6877,
+  "eval_noise_count": 26,
+  "eval_bird_count": 688,
+  "test_noise_count": 26,
+  "test_bird_count": 688,
   "gated_three_class": {
-    "accuracy": 0.9890633763320247,
-    "abstention_rate": 0.005047672462142457,
+    "accuracy": 0.9859943977591037,
+    "abstention_rate": 0.0028011204481792717,
     "confusion_matrix_labels": [
       0,
       1,
@@ -47,14 +47,14 @@
     ],
     "confusion_matrix": [
       [
-        246,
-        5,
-        4
+        25,
+        1,
+        0
       ],
       [
-        37,
-        6808,
-        32
+        7,
+        679,
+        2
       ],
       [
         0,
@@ -64,37 +64,37 @@
     ]
   },
   "gated_binary_excluding_uncertain": {
-    "acc": 0.9940811724915445,
-    "prec": 0.9992661089094378,
-    "rec": 0.9945945945945946,
-    "f1": 0.9969248791916825,
-    "tn": 246,
-    "fp": 5,
-    "fn": 37,
-    "tp": 6808,
-    "fpr": 0.0199203187250996,
-    "fnr": 0.005405405405405406
+    "acc": 0.9887640449438202,
+    "prec": 0.9985294117647059,
+    "rec": 0.9897959183673469,
+    "f1": 0.9941434846266471,
+    "tn": 25,
+    "fp": 1,
+    "fn": 7,
+    "tp": 679,
+    "fpr": 0.038461538461538464,
+    "fnr": 0.01020408163265306
   },
   "gated_routing_uncertain_as_bird": {
     "low_threshold": 0.3,
     "high_threshold": 0.7,
     "description": "OOD\u2192noise; else pred_bird = 1 iff sigmoid(logit) > low_threshold",
-    "acc": 0.9935501962983735,
-    "prec": 0.9986859395532195,
-    "rec": 0.994619746982696,
-    "f1": 0.9966486959055807,
-    "tn": 246,
-    "fp": 9,
-    "fn": 37,
-    "tp": 6840,
-    "fpr": 0.03529411764705882,
-    "fnr": 0.005380253017304057
+    "acc": 0.988795518207283,
+    "prec": 0.998533724340176,
+    "rec": 0.9898255813953488,
+    "f1": 0.9941605839416059,
+    "tn": 25,
+    "fp": 1,
+    "fn": 7,
+    "tp": 681,
+    "fpr": 0.038461538461538464,
+    "fnr": 0.010174418604651164
   },
   "reconstruction_error": {
-    "bird_mean": 0.07557495714444112,
-    "bird_std": 0.030292934901676664,
-    "noise_mean": 0.0701538676943849,
-    "noise_std": 0.05057061640982106,
+    "bird_mean": 0.08073950658259957,
+    "bird_std": 0.031186900719203124,
+    "noise_mean": 0.08352754608942912,
+    "noise_std": 0.05762332054658525,
     "threshold_tau_ae": 0.1722127881646156
   }
 }

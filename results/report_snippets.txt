@@ -1,18 +1,18 @@
-### Benchmark comparison (full manifest, N=10044)
+### Benchmark comparison (full manifest, N=7132)
 
-Table \ref{tab:benchmark} summarizes binary classification performance for three systems evaluated on every manifest row, including rows that were seen during classifier training. The BirdNET baseline applies the saved validation-optimal threshold (0.51) to exported analyzer scores. The noise-aware MLP operates on BirdNET embeddings with the same binary cutoff. The full pipeline applies autoencoder-based out-of-distribution rejection prior to the MLP; binary predictions follow the same cutoff on classifier logits for non-rejected embeddings, while rejected embeddings are assigned the noise class.
+Table \ref{tab:benchmark} summarizes binary classification performance for three systems evaluated on every manifest row, including rows that were seen during classifier training. The BirdNET baseline applies the saved validation-optimal threshold (0.25) to exported analyzer scores. The noise-aware MLP operates on BirdNET embeddings with the same binary cutoff. The full pipeline applies autoencoder-based out-of-distribution rejection prior to the MLP; binary predictions follow the same cutoff on classifier logits for non-rejected embeddings, while rejected embeddings are assigned the noise class.
 
-Observed metrics — Baseline: accuracy 0.4403, F1 0.5976, FPR 0.0276, FNR 0.5735; MLP-only: accuracy 0.9991, F1 0.9995, FPR 0.0197, FNR 0.0004; MLP+AE: accuracy 0.9953, F1 0.9976, FPR 0.0197, FNR 0.0043.
+Observed metrics — Baseline: accuracy 0.5421, F1 0.6890, FPR 0.0235, FNR 0.4740; MLP-only: accuracy 0.9979, F1 0.9989, FPR 0.0353, FNR 0.0009; MLP+AE: accuracy 0.9938, F1 0.9968, FPR 0.0353, FNR 0.0051.
 
 ### Area under curve
 
-BirdNET Baseline: ROC-AUC 0.7240, PR-AUC 0.9923; MLP Only: ROC-AUC 0.9980, PR-AUC 0.9999; MLP + AE Gate: ROC-AUC 0.9942, PR-AUC 0.9998
+BirdNET Baseline: ROC-AUC 0.7637, PR-AUC 0.9907; MLP Only: ROC-AUC 0.9919, PR-AUC 0.9995; MLP + AE Gate: ROC-AUC 0.9879, PR-AUC 0.9993
 
 ROC and Precision-Recall curves are provided in Figure \ref{fig:roc} and Figure \ref{fig:pr} respectively.
 
 ### Statistical validation
 
-We assessed paired differences in per-segment correctness (indicator equal to one if the predicted label matches the manifest-derived bird/noise label). A paired t-test and a Wilcoxon signed-rank test were applied to compare (i) BirdNET baseline versus the embedding MLP, and (ii) the MLP without versus with the autoencoder gate. For baseline versus MLP, the paired t-test yielded p = 0.0000e+00 (Wilcoxon p = 0.0000e+00); for MLP versus MLP+AE, the paired t-test yielded p = 6.8378e-10 (Wilcoxon p = 7.0745e-10). Values below the conventional α = 0.05 threshold are interpreted as evidence of a statistically significant shift in paired accuracy between systems on the same segments.
+We assessed paired differences in per-segment correctness (indicator equal to one if the predicted label matches the manifest-derived bird/noise label). A paired t-test and a Wilcoxon signed-rank test were applied to compare (i) BirdNET baseline versus the embedding MLP, and (ii) the MLP without versus with the autoencoder gate. For baseline versus MLP, the paired t-test yielded p = 0.0000e+00 (Wilcoxon p = 0.0000e+00); for MLP versus MLP+AE, the paired t-test yielded p = 7.0425e-08 (Wilcoxon p = 7.2378e-08). Values below the conventional α = 0.05 threshold are interpreted as evidence of a statistically significant shift in paired accuracy between systems on the same segments.
 
 ### Error analysis and qualitative review
 

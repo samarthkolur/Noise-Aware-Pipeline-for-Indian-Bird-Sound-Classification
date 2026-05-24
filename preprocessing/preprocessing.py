@@ -148,22 +148,44 @@ class Preprocessor:
             rms_db = self._rms_db(seg)
             is_silent = rms_db < self.rms_threshold_db
 
+            # ── Silent segments → route to noise instead of dropping ──
+            silence_gated = False
             if self.silence_removal_enabled and is_silent:
+                silence_gated = True
                 self._stats_dropped_silent += 1
-                logger.debug(
-                    f"  Dropping segment {idx} (RMS={rms_db:.1f} dB < "
-                    f"{self.rms_threshold_db} dB)"
+                logger.info(
+                    f"[{audio_path.name}] Seg {idx} ({start_sec:.1f}-{end_sec:.1f}s) → NOISE (SILENCE_GATE): "
+                    f"RMS {rms_db:.1f} dB < threshold {self.rms_threshold_db} dB"
                 )
-                continue
 
-            if self.noise_reducer is not None:
+            # 3. Noise reduction (spectral gating / bandpass)
+            nr_gated = False
+            if not silence_gated and self.noise_reducer is not None:
                 seg = self.noise_reducer.reduce(seg, self.target_sr)
+                post_nr_rms = self._rms_db(seg)
+                if self.silence_removal_enabled and post_nr_rms < self.rms_threshold_db:
+                    nr_gated = True
+                    self._stats_dropped_silent += 1
+                    logger.info(
+                        f"[{audio_path.name}] Seg {idx} ({start_sec:.1f}-{end_sec:.1f}s) → NOISE (NR_SILENCE): "
+                        f"RMS {post_nr_rms:.1f} dB < threshold {self.rms_threshold_db} dB"
+                    )
 
             stem = audio_path.stem
             source_species = species
 
+            # If silence-gated or NR-gated, force-route to noise
+            if silence_gated or nr_gated:
+                out_species = NOISE_FOLDER_NAME
+                v2_label = "noise"
+                v2_mean = None
+                v2_nvotes = None
+                v2_nsub = None
+                rescue_bird_p = None
+                v2_rescued = False
+                seg_filename = f"{source_species}__{stem}_seg{idx:04d}.wav"
             # Manual-only noise folder: no V2 routing (always class `noise`)
-            if species == NOISE_FOLDER_NAME:
+            elif species == NOISE_FOLDER_NAME:
                 out_species = NOISE_FOLDER_NAME
                 v2_label = None
                 v2_mean = None

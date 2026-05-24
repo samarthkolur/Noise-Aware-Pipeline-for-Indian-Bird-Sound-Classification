@@ -1,51 +1,27 @@
-# ── Python ──────────────────────────────────
 __pycache__/
 *.py[cod]
-*.egg-info/
-*.egg
-dist/
-build/
 .venv/
 .venv_ci/
 venv/
 env/
-.pytest_cache/
-
-# ── Data & Models (large files) ─────────────
 data/
-iBC53/
-outputs/
 checkpoints/
+outputs/
+results/
 logs/
-models/birdnet/
-
-# ── IDE / OS ────────────────────────────────
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-.DS_Store
-Thumbs.db
-
-# ── Jupyter ─────────────────────────────────
-.ipynb_checkpoints/
-
-# ── Streamlit demo temp ─────────────────────
-.streamlit_preprocess_tmp/
-.streamlit_demo/
-
-# ── Large BirdNET per-file eval dump ────────
-results/real_birdnet_eval/real_birdnet_eval.json
-
-# ── Misc ────────────────────────────────────
-*.log
-*.pid
+iBC53/
+*.wav
+*.flac
+*.mp3
+*.pt
+*.tflite
 *.h5
 *.hdf5
-*.tflite
-data/
-*.wav
-*.mp3
-*.npy
-*.pt
+birdnet_weights/
+output_model/
+.ipynb_checkpoints/
+app/streamlit_workdir/
+.streamlit_demo/
+.DS_Store
+*.pid
+real_baseline.pid

@@ -118,7 +118,10 @@ class AutoencoderTrainer:
         ae_weight_decay = float(ae_cfg.get("weight_decay", 1e-5))
         self.optimizer = Adam(self.model.parameters(), lr=self.lr, weight_decay=ae_weight_decay)
         self.scheduler = CosineAnnealingLR(self.optimizer, T_max=self.epochs)
-        self.loss_fn = nn.MSELoss()
+        self.mse_loss = nn.MSELoss()
+        # Cosine similarity for structural regularization
+        self.cos_sim = nn.CosineSimilarity(dim=1)
+        self.cosine_weight = float(ae_cfg.get("cosine_weight", 0.1))
 
     def fit(self) -> None:
         """Train autoencoder, save best checkpoint, compute recon threshold."""
@@ -167,7 +170,9 @@ class AutoencoderTrainer:
             emb = emb.to(self.device, non_blocking=True)
             self.optimizer.zero_grad(set_to_none=True)
             reconstructed, _ = self.model(emb)
-            loss = self.loss_fn(reconstructed, emb)
+            mse = self.mse_loss(reconstructed, emb)
+            cos_penalty = 1.0 - self.cos_sim(reconstructed, emb).mean()
+            loss = mse + self.cosine_weight * cos_penalty
             loss.backward()
             self.optimizer.step()
             total_loss += loss.item()
@@ -182,7 +187,9 @@ class AutoencoderTrainer:
         for emb, _labels in loader:
             emb = emb.to(self.device, non_blocking=True)
             reconstructed, _ = self.model(emb)
-            loss = self.loss_fn(reconstructed, emb)
+            mse = self.mse_loss(reconstructed, emb)
+            cos_penalty = 1.0 - self.cos_sim(reconstructed, emb).mean()
+            loss = mse + self.cosine_weight * cos_penalty
             total_loss += loss.item()
             n += 1
         return total_loss / max(n, 1)

@@ -1,0 +1,1814 @@
+% main.tex
+\documentclass[a4paper,12pt]{article}
+
+% ---------------- MARGINS ----------------
+\usepackage[left=1in, right=1in, top=0.75in, bottom=0.75in]{geometry}
+
+% ---------------- PACKAGES ----------------
+\usepackage{fancyhdr}
+\usepackage{graphicx}
+\usepackage{grffile}
+\usepackage{multirow}
+\usepackage{tikz}
+\usepackage{everypage}
+\usepackage{setspace}
+\usepackage{multicol}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{subcaption}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{cite}
+\usepackage{caption}
+\usepackage{xcolor}
+\usepackage{times}
+\usepackage{tocloft}
+\usepackage{ragged2e}
+\usepackage{float}
+\renewcommand{\cftdot}{}
+\justifying
+\usepackage{chngcntr}
+\usetikzlibrary{positioning,arrows.meta,shapes.geometric,fit,backgrounds}
+\captionsetup{font=small}
+
+% ---------------- TIKZ STYLES ----------------
+\tikzset{
+  pipsmall/.style={draw, rectangle, rounded corners, align=center,
+                   font=\footnotesize, inner sep=4pt, minimum height=0.70cm,
+                   text width=2.2cm},
+  pipdec/.style={draw, diamond, aspect=2.2, align=center,
+                 font=\footnotesize, inner sep=2pt, text width=1.6cm,
+                 minimum height=0.90cm},
+  arr/.style={-{Latex[length=2mm]}, thick},
+  arrd/.style={-{Latex[length=2mm]}, thick, dashed}
+}
+
+% ---------------- REMOVE RED BOXES ----------------
+\hypersetup{
+    colorlinks=false,
+    pdfborder={0 0 0}
+}
+
+% ---------------- TOC FORMATTING ----------------
+\renewcommand{\cftsecfont}{\bfseries}
+\renewcommand{\cftsecpagefont}{\bfseries}
+\renewcommand{\cftsubsecfont}{\normalfont}
+\renewcommand{\cftsubsecpagefont}{\normalfont}
+\setlength{\cftsecindent}{0em}
+\setlength{\cftsecnumwidth}{2.5em}
+\setlength{\cftsubsecindent}{2.5em}
+\setlength{\cftsubsecnumwidth}{3em}
+
+% ---------------- PAGE BORDER ----------------
+\AddEverypageHook{%
+    \begin{tikzpicture}[remember picture, overlay]
+        \draw[line width=1pt]
+            ([xshift=10mm, yshift=15mm] current page.south west)
+            rectangle
+            ([xshift=-10mm, yshift=-15mm] current page.north east);
+    \end{tikzpicture}%
+}
+
+% ---------------- FONT & SPACING ----------------
+\onehalfspacing
+
+% ---------------- HEADER HEIGHT FIX ----------------
+\setlength{\headheight}{15pt}
+
+% ---------------- PLAIN STYLE ----------------
+\fancypagestyle{plain}{
+    \fancyhf{}
+    \fancyfoot[L]{Dept. of CST, DSU}
+    \fancyfoot[R]{\thepage}
+    \renewcommand{\headrulewidth}{0pt}
+    \renewcommand{\footrulewidth}{0pt}
+}
+
+% ---------------- MAIN PAGE STYLE ----------------
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\textbf{Noise-Aware Pipeline for Indian Bird Sound Classification Using BirdNET Embeddings}}
+\fancyfoot[L]{Dept. of CST, DSU}
+\fancyfoot[R]{\thepage}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0pt}
+
+\begin{document}
+\pagenumbering{gobble}
+
+% -------------------------
+% COVER PAGE
+% -------------------------
+\thispagestyle{empty}
+
+\begin{center}
+
+\begin{minipage}{0.4\textwidth}
+\centering
+\includegraphics[width=0.8\linewidth]{logo_d.jpg}
+\end{minipage}
+\hfill
+\begin{minipage}{0.4\textwidth}
+\centering
+\includegraphics[width=0.8\linewidth]{logo_s.png}
+\end{minipage}
+
+\vspace{0.8cm}
+
+{\Large \textbf{DAYANANDA SAGAR UNIVERSITY}} \\[4pt]
+{\large \textbf{SCHOOL OF ENGINEERING}} \\[6pt]
+{\small Devarakaggalahalli, Harohalli, Kanakapura Road,\\
+Bangalore South Dt., Bengaluru -- 562112}
+
+\vspace{1cm}
+
+{\large \textbf{DEPARTMENT OF COMPUTER SCIENCE \& TECHNOLOGY}}
+
+\vspace{1.5cm}
+
+{\Large \textcolor{red}{\textbf{Minor Project (23CT3613)}}} \\[4pt]
+{\Large \textcolor{red}{\textbf{Report on}}}
+
+\vspace{0.8cm}
+
+{\large \textcolor{red}{\textbf{
+Noise-Aware Pipeline for Indian Bird Sound Classification\\
+Using BirdNET Embeddings, Focal-Loss MLP, and Autoencoder Gating
+}}}
+
+\vspace{1.5cm}
+
+{\large \textbf{Submitted By}}
+
+\vspace{0.5cm}
+
+\begin{tabular}{ll}
+Samarth D Kolur & ENG23CT0019 \\
+Manoj C         & ENG23CT0031 \\
+Mithun Krishnan & ENG23CT0034 \\
+Yashaswini R    & ENG23CT0044 \\
+\end{tabular}
+
+\vspace{1.5cm}
+
+{\large \textbf{Under the Supervision of}} \\[4pt]
+{\textbf{Dr. Ramandeep Kaur}} \\[2pt]
+{\small Assistant Professor, Department of CST, DSU}
+
+\vspace{2cm}
+
+{\textbf{DEPARTMENT OF COMPUTER SCIENCE \& TECHNOLOGY}} \\
+{\textbf{DAYANANDA SAGAR UNIVERSITY}}
+
+\end{center}
+
+% -------------------------
+% CERTIFICATE PAGE
+% -------------------------
+\newpage
+\thispagestyle{empty}
+\vspace{2cm}
+\begin{center}
+\includegraphics[width=0.4\textwidth]{logo_d.jpg}
+\hspace{70pt}
+\includegraphics[width=0.4\textwidth]{logo_s.png}
+
+\vspace{1cm}
+\textbf{\Large DAYANANDA SAGAR UNIVERSITY} \\
+\textbf{\Large SCHOOL OF ENGINEERING} \\
+Devarakaggalahalli, Harohalli, Kanakapura Road, Bangalore South Dt., Bengaluru -- 562112
+
+\vspace{1cm}
+\textbf{\Large CERTIFICATE}
+\end{center}
+
+\vspace{1cm}
+
+\justify
+This is to certify that the work titled
+``\textbf{Noise-Aware Pipeline for Indian Bird Sound Classification Using BirdNET Embeddings,
+Focal-Loss MLP, and Autoencoder Gating}''
+is carried out by
+\textbf{Samarth D Kolur -- ENG23CT0019},
+\textbf{Manoj C -- ENG23CT0031},
+\textbf{Mithun Krishnan -- ENG23CT0034},
+and \textbf{Yashaswini R -- ENG23CT0044},
+bonafide students of Bachelor of Technology in Computer Science and Technology at the School of Engineering,
+Dayananda Sagar University, Bangalore, in partial fulfillment for the award of degree in Bachelor
+of Technology in Computer Science and Technology during the academic year 2025--2026.
+
+\vspace{2cm}
+
+\noindent
+\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} c c}
+\textbf{Dr. Ramandeep Kaur} & \textbf{Dr. Shahina M Parveen} \\[6pt]
+\begin{tabular}{c}
+Assistant Professor,\\
+Dept. of CST,\\
+School of Engineering,\\
+Dayananda Sagar University.
+\end{tabular}
+&
+\begin{tabular}{c}
+Chairperson, CST,\\
+Dept. of CST,\\
+School of Engineering,\\
+Dayananda Sagar University.
+\end{tabular}
+\end{tabular*}
+
+\vspace{1.5cm}
+
+\noindent \textbf{Date:}
+
+% -------------------------
+% DECLARATION PAGE
+% -------------------------
+\newpage
+\thispagestyle{plain}
+
+\vspace{1.5cm}
+
+\begin{center}
+\includegraphics[width=0.4\textwidth]{logo_d.jpg}
+\hspace{70pt}
+\includegraphics[width=0.4\textwidth]{logo_s.png}
+
+\vspace{0.8cm}
+
+\textbf{\Large DAYANANDA SAGAR UNIVERSITY} \\
+\textbf{\Large SCHOOL OF ENGINEERING} \\
+Devarakaggalahalli, Harohalli, Kanakapura Road, Bangalore South Dt., Bengaluru -- 562112
+
+\vspace{0.8cm}
+
+\textbf{\Large DECLARATION}
+\end{center}
+
+\vspace{0.8cm}
+
+\justify
+We, \textbf{Samarth D Kolur -- ENG23CT0019},
+\textbf{Manoj C -- ENG23CT0031},
+\textbf{Mithun Krishnan -- ENG23CT0034},
+and \textbf{Yashaswini R -- ENG23CT0044},
+are students of the \textbf{sixth semester} B.Tech in Computer Science and Technology at the
+School of Engineering, Dayananda Sagar University. We hereby declare that the minor project titled
+``\textbf{Noise-Aware Pipeline for Indian Bird Sound Classification Using BirdNET Embeddings,
+Focal-Loss MLP, and Autoencoder Gating}''
+has been carried out by us and submitted in partial fulfillment for the award of degree
+in Bachelor of Technology in Computer Science and Technology during the academic year 2025--2026.
+
+\vspace{0.8cm}
+
+\begin{tabular}{p{0.08\textwidth} p{0.5\textwidth} p{0.32\textwidth}}
+\textbf{Sl.No.} & \textbf{Name and USN} & \textbf{Student Signature} \\[8pt]
+1 & Samarth D Kolur \newline ENG23CT0019 & \\[12pt]
+2 & Manoj C \newline ENG23CT0031 & \\[12pt]
+3 & Mithun Krishnan \newline ENG23CT0034 & \\[12pt]
+4 & Yashaswini R \newline ENG23CT0044 & \\
+\end{tabular}
+
+\vspace{1.5cm}
+
+\noindent
+\hspace{0.5cm} Place: DSU, Bangalore \hfill Date:
+
+% -------------------------
+% ACKNOWLEDGEMENT
+% -------------------------
+\newpage
+\thispagestyle{plain}
+
+\begin{center}
+{\fontsize{18}{20}\bfseries ACKNOWLEDGEMENT}
+\end{center}
+
+\vspace{0.5cm}
+
+\justify
+\noindent
+It is a great pleasure for us to acknowledge the assistance and support of many individuals who have been
+responsible for the successful completion of this \textbf{Noise-Aware Pipeline for Indian Bird Sound
+Classification using BirdNET Embeddings, Focal-Loss MLP, and Autoencoder Gating}. First, we take this
+opportunity to express our sincere gratitude to the School of Engineering and Technology, Dayananda Sagar
+University for providing us with a great opportunity to pursue our bachelor's degree in this institution.
+
+\vspace{0.3cm}
+
+\noindent
+We would like to thank \textbf{Dr. Udaya Kumar Reddy K R, Dean, School of Engineering and Technology,
+Dayananda Sagar University} for providing this opportunity.
+
+\vspace{0.3cm}
+
+\noindent
+It is an immense pleasure to express our sincere thanks to \textbf{Dr. M. Shahina Parveen, Chairperson,
+Department of Computer Science and Technology, Dayananda Sagar University}, for providing the right
+academic guidance and motivating us during the course.
+
+\vspace{0.3cm}
+
+\noindent
+We express our sincere thanks to our guide, \textbf{Dr. Ramandeep Kaur}, Assistant Professor,
+Department of Computer Science and Technology, for her valuable time, academic guidance, and constant
+support throughout this project.
+
+% -------------------------
+% ABSTRACT
+% -------------------------
+\newpage
+\thispagestyle{plain}
+
+\begin{center}
+{\fontsize{18}{20}\bfseries ABSTRACT}
+\end{center}
+
+\addcontentsline{toc}{section}{Abstract}
+
+\vspace{0.5cm}
+
+\justify
+\noindent
+Passive acoustic monitoring of Indian bird species faces a fundamental challenge that existing detectors
+fail to address: BirdNET, trained predominantly on global temperate-zone recordings, misses a substantial
+fraction of vocalisations from Indian species under realistic field-noise conditions. Applying a fixed
+confidence threshold to its sigmoid-transformed logit outputs compounds this by conflating calibration
+errors with genuine out-of-distribution (OOD) noise. This project presents a \textbf{noise-aware
+machine-listening pipeline} that explicitly closes this gap through five tightly coupled components.
+
+\vspace{0.3cm}
+
+\noindent
+The system begins with \textbf{subframe-level Noise Segregation V2}, which divides each 3-second
+segment into six non-overlapping 0.5-second subframes and scores each using a weighted combination
+of zero-crossing rate, spectral flatness, spectral centroid statistics, and insect-band autocorrelation.
+A \textbf{Bird Guard} module subsequently checks for harmonic structure and spectral peak prominence
+to recover bird-like segments misclassified by the noise scorer, and an \textbf{MLP-based Bird Rescue}
+pass re-checks noise-labelled segments to recover faint or partially masked calls.
+
+\vspace{0.3cm}
+
+\noindent
+Feature extraction uses frozen \textbf{BirdNET V2.4 TFLite embeddings} (1024-dimensional penultimate
+global average pooling activations). A \textbf{focal-loss binary MLP classifier} (architecture:
+$1024 \to 512 \to 256 \to 1$, $\gamma = 2.0$) is fine-tuned on these embeddings for
+bird-versus-noise discrimination optimised for the Indian noise regime. An \textbf{autoencoder OOD
+rejection gate} trained exclusively on bird embeddings uses per-sample reconstruction MSE to reject
+out-of-distribution segments prior to MLP classification, with the gating threshold $\tau_{\mathrm{AE}}$
+set at the 99th percentile of validation bird reconstruction errors.
+
+\vspace{0.3cm}
+
+\noindent
+A calibrated \textbf{three-band router} ($\tau_{\mathrm{low}} = 0.3$, $\tau_{\mathrm{high}} = 0.7$)
+with automated hard-example mining supports human-in-the-loop retraining cycles. On the iBC53 corpus
+of 53 Indian bird species (10,044 three-second segments; 9,790 bird / 254 noise), the MLP-only
+pipeline raises accuracy from 0.440 to \textbf{0.999} and F1 from 0.598 to \textbf{1.000}, reducing
+the false-negative rate from 57.4\% to 0.04\% and the false-positive rate from 2.76\% to 1.97\%.
+Adding the autoencoder gate yields accuracy 0.995 and F1 0.998 with a robust OOD safety layer.
+ROC-AUC improves from 0.724 to 0.998. All improvements are statistically significant at $p < 0.05$
+via paired $t$-test and Wilcoxon signed-rank test.
+
+\vspace{0.5cm}
+
+\noindent
+\textbf{Keywords:} Bird Sound Classification, Bioacoustics, Noise Segregation V2, BirdNET V2.4,
+Focal Loss, MLP Classifier, Autoencoder OOD Gating, Three-Band Routing, Active Learning,
+iBC53, Indian Birds, Passive Acoustic Monitoring
+
+% -------------------------
+% TABLE OF CONTENTS
+% -------------------------
+\newpage
+\tableofcontents
+
+% -------------------------
+% LIST OF FIGURES
+% -------------------------
+\newpage
+\listoffigures
+
+% -------------------------
+% LIST OF TABLES
+% -------------------------
+\newpage
+\listoftables
+
+% -------------------------
+% PAGE NUMBER START
+% -------------------------
+\newpage
+\pagenumbering{arabic}
+\setcounter{page}{1}
+
+% ======================================================
+% CHAPTER 1
+% ======================================================
+\newpage
+\thispagestyle{plain}
+
+\begin{center}
+{\fontsize{18}{20}\bfseries CHAPTER 1}
+\end{center}
+
+\addcontentsline{toc}{section}{\textbf{CHAPTER 1}}
+\vspace{0.5cm}
+
+\setcounter{section}{0}
+\renewcommand{\thesection}{1.\arabic{section}}
+
+\section{Introduction}
+
+\noindent
+India hosts over 1,300 bird species --- roughly 13\% of global avian diversity --- and ranks among the
+world's twelve mega-biodiverse nations. Yet systematic monitoring of this diversity remains constrained
+by terrain, cost, and the scarcity of trained ornithologists in remote areas. Passive acoustic monitoring
+(PAM), which deploys low-cost recorders to capture soundscapes over days or weeks, has emerged as the
+principal scalable alternative for avian biodiversity assessment.
+
+\vspace{0.3cm}
+
+\noindent
+Indian soundscapes present an unusually severe noise regime: dense insect choruses (crickets, cicadas)
+overlap spectrally with bird calls, monsoon rain generates broadband masking, agricultural activity
+introduces anthropogenic interference, and recording equipment varies widely across citizen-science
+deployments. These disturbances make accurate automated identification of bird vocalizations
+particularly challenging.
+
+\vspace{0.3cm}
+
+\noindent
+One of the most widely adopted systems for bird sound recognition is BirdNET~\cite{BirdNET}, a large-scale
+deep learning model capable of identifying hundreds of bird species from raw audio recordings. However,
+BirdNET was trained predominantly on North American and European recordings, and when deployed on Indian
+field recordings, two systematic failure modes emerge. First, many endemic Indian species are absent or
+under-represented in BirdNET's training data, causing the detector to assign near-zero confidence to
+genuine vocalisations --- a high false-negative regime~\cite{WoodKahl}. Second, BirdNET confidence scores
+are sigmoid-transformed logits rather than calibrated probabilities~\cite{WoodKahl}, meaning that a
+universal threshold (typically 0.5) applied across species and soundscapes misclassifies noise-dominated
+segments as birds, inflating false positives. Both failures directly degrade the curation quality of
+training corpora for downstream species models.
+
+\vspace{0.3cm}
+
+\noindent
+This project addresses these limitations by proposing a structured, \textbf{noise-aware pipeline} that
+integrates subframe-level noise segregation with harmonic checking, MLP-based bird rescue, frozen BirdNET
+V2.4 embedding extraction, a focal-loss MLP classifier, an autoencoder OOD rejection gate, and a
+three-band confidence router with automated hard-example mining --- specifically targeting Indian species
+and noise conditions.
+
+\section{Motivation}
+
+\noindent
+The motivation for this project arises from two practical failure modes directly observed on the
+iBC53 corpus~\cite{iBC53}. When BirdNET confidence thresholding was evaluated directly on iBC53-derived
+segments, we observed accuracy of only 0.440 and a false-negative rate of 57.4\% --- confirming that
+off-the-shelf thresholding is untenable for Indian PAM workflows. This catastrophic FNR means that
+a PAM deployment surveying a forest patch would label more than half of genuine bird vocalisations
+as noise, systematically under-counting species richness and activity levels.
+
+\vspace{0.3cm}
+
+\noindent
+Another key motivation is the need for automation in large-scale data processing. Manual annotation
+of bird sounds is time-consuming and requires significant domain expertise, making it impractical
+when working with large volumes of passive acoustic data. The severe class imbalance in real-world
+corpora (approximately 38.5:1 bird-to-noise ratio in iBC53 after pipeline processing) further
+complicates classifier training and threshold selection.
+
+\vspace{0.3cm}
+
+\noindent
+By combining structured subframe-level noise filtering with harmonic bird-guard checking, MLP-based
+bird rescue, deep feature extraction using frozen BirdNET embeddings, focal-loss MLP classification,
+autoencoder OOD gating, and three-band confidence routing, the system becomes robust and adaptable
+to Indian field conditions while maintaining efficiency and scalability.
+
+\section{Problem Statement}
+
+\noindent
+The primary problem addressed in this project is the reliable binary classification of audio segments
+as bird-containing or noise-only in real-world Indian soundscapes. Existing systems fail in two
+systematic ways: (1)~BirdNET's closed-set species confidence, when applied at a fixed threshold to
+Indian recordings, misses 57.4\% of genuine bird vocalisations because many endemic Indian species
+are absent from its training distribution; and (2)~BirdNET sigmoid outputs are uncalibrated~\cite{WoodKahl},
+so noise-dominated segments receive inflated confidence scores and are misclassified as bird detections.
+
+\vspace{0.3cm}
+
+\noindent
+This dual failure mode is compounded by the absence of an integrated pipeline that couples domain-specific
+noise scoring with harmonic structure verification, a bird rescue mechanism for partially masked calls,
+frozen embedding extraction, a domain-specific focal-loss classifier, OOD rejection gating, and
+uncertainty-surfacing confidence routing. The lack of such integration leads to inconsistent performance
+and limits practical applicability in Indian ecological monitoring tasks.
+
+\vspace{0.3cm}
+
+\noindent
+Therefore, the problem is defined as: designing a reliable, noise-aware, and statistically validated
+system that accurately separates bird vocalisations from background noise in Indian field recordings,
+while maintaining modularity, efficiency, and scalability for real-world PAM deployment.
+\newpage
+\section{Objectives}
+
+\noindent
+The objectives of this project are:
+
+\begin{itemize}
+    \item To develop a preprocessing framework that resamples raw audio to 48~kHz mono, segments
+          recordings into non-overlapping 3-second clips, and removes near-silent segments using
+          RMS energy thresholding ($< -40$~dB).
+    \item To design and implement \textbf{Noise Segregation V2} --- a six-subframe, multi-feature
+          noise scoring module augmented with harmonic Bird Guard checking and an MLP Bird Rescue
+          pass --- that effectively differentiates bird sounds from background noise prior to
+          embedding extraction.
+    \item To extract 1024-dimensional audio feature embeddings using the frozen BirdNET V2.4
+          TFLite model~\cite{BirdNET} (penultimate global average pooling activation) for reproducible,
+          high-quality feature representations.
+    \item To build a focal-loss binary MLP classifier ($1024 \to 512 \to 256 \to 1$, $\gamma = 2.0$)
+          trained on BirdNET embeddings that accurately predicts bird-versus-noise probability,
+          with early stopping on validation F1 and threshold sweep for optimal operating point.
+    \item To incorporate an \textbf{autoencoder OOD rejection gate} trained exclusively on
+          bird embeddings, using per-sample reconstruction MSE with gating threshold
+          $\tau_{\mathrm{AE}}$ set at the 99th percentile of validation bird reconstruction
+          errors, to reject out-of-distribution inputs before classification.
+    \item To construct an end-to-end pipeline integrating preprocessing, noise segregation,
+          embedding extraction, classification, OOD gating, and three-band confidence routing
+          ($\tau_{\mathrm{low}} = 0.3$, $\tau_{\mathrm{high}} = 0.7$) with automated
+          hard-example mining for human-in-the-loop active learning.
+    \item To evaluate the system via a three-way quantitative benchmark (BirdNET baseline,
+          MLP-only, MLP$+$AE gate) on the iBC53 corpus~\cite{iBC53} with statistical significance
+          testing using paired $t$-test and Wilcoxon signed-rank test at $p < 0.05$.
+\end{itemize}
+
+\section{Summary}
+
+\noindent
+This chapter introduced the context of passive acoustic monitoring of Indian bird species and
+identified two systematic failure modes of BirdNET confidence thresholding: a catastrophically
+high false-negative rate (57.4\%) due to domain mismatch, and uncalibrated sigmoid scores
+causing false positives. The motivation was grounded in observed empirical failure on the iBC53
+corpus, and the objectives articulate the five coupled pipeline components --- Noise Segregation V2
+with Bird Guard and Bird Rescue, frozen BirdNET V2.4 embeddings, focal-loss MLP, autoencoder OOD
+gate, and three-band router --- that together address these gaps.
+
+% ======================================================
+% CHAPTER 2
+% ======================================================
+\newpage
+\thispagestyle{plain}
+
+\begin{center}
+{\fontsize{18}{20}\bfseries CHAPTER 2}
+\end{center}
+
+\addcontentsline{toc}{section}{\textbf{CHAPTER 2}}
+
+\vspace{0.5cm}
+
+\setcounter{section}{0}
+\renewcommand{\thesection}{2.\arabic{section}}
+
+\section{Overview}
+
+\noindent
+Passive acoustic monitoring has emerged as the dominant scalable approach for biodiversity monitoring,
+with automated machine learning analysis now essential for processing the large volumes of data it
+produces~\cite{Stowell}. Deep learning tools have accelerated adoption across taxa and ecosystems.
+However, real-world audio recordings are often noisy and unstructured. Environmental sounds such as
+wind, insects, rainfall, and human activity frequently overlap with bird calls, making accurate
+classification challenging. Noise and poor-quality data significantly affect model performance,
+leading to incorrect predictions and reduced reliability in practical applications.
+
+\vspace{0.3cm}
+
+\noindent
+Modern approaches rely on deep learning techniques such as convolutional neural networks capable of
+learning patterns directly from audio spectrograms. These models have shown strong performance in
+large-scale bird species recognition tasks, but still face difficulties in highly noisy environments
+--- particularly in tropical soundscapes where overlapping biological signals and anthropogenic
+interference are far more severe than in the temperate habitats that dominate current training
+corpora.
+
+\vspace{0.3cm}
+
+\noindent
+A critical advancement has been the use of feature embeddings and transfer learning. Embeddings
+extracted from pre-trained systems such as BirdNET~\cite{BirdNET} capture important acoustic
+characteristics, improving classification accuracy and generalization across diverse datasets.
+This approach is especially useful when working with geographically distinct or under-represented
+audio collections. Building on these research insights, this project proposes a structured
+noise-aware pipeline that couples subframe-level acoustic scoring, harmonic verification, MLP
+rescue, frozen embedding extraction, focal-loss classification, OOD gating, and three-band routing
+into a unified workflow.
+
+\newpage
+\section{Literature Survey}
+
+\noindent
+The field of bird sound classification and passive acoustic monitoring has seen significant
+advancements through the application of deep learning and transfer learning techniques.
+The survey below reviews key works that inform the design of the proposed system.
+
+\vspace{0.3cm}
+
+\noindent
+\textbf{Bird Sound Recognition and BirdNET.}
+Kahl et al.\ \cite{BirdNET} introduced BirdNET, a large-scale deep learning system for avian
+diversity monitoring capable of identifying hundreds of bird species from audio recordings. The
+work demonstrates that domain-specific data augmentation and structured preprocessing are critical
+for handling noisy and overlapping vocalizations. A subsequent study by Wood and Kahl~\cite{WoodKahl}
+cautions that BirdNET confidence scores are sigmoid-transformed logits and not calibrated
+probabilities; applying a fixed detection threshold across environments routinely inflates both
+false-positive and false-negative rates, motivating the need for post-processing pipelines such
+as the one proposed here. A broader critical assessment of BirdNET's applications, performance,
+and known pitfalls is provided by P\'{e}rez-Granados~\cite{PerezGranados}.
+
+\vspace{0.3cm}
+
+\noindent
+\textbf{BirdNET Embeddings and Transfer Learning.}
+McGinn et al.\ \cite{McGinn} demonstrate that BirdNET embeddings capture meaningful ecological
+information beyond species labels and can be used effectively for downstream habitat and
+biodiversity analysis. Ghani et al.\ \cite{Ghani} show that global birdsong embeddings derived
+from pre-trained models enable superior transfer learning for bioacoustic classification tasks,
+significantly outperforming models trained from scratch. M\"{u}ller et al.~\cite{Muller} demonstrate
+that shallow fine-tuning of BirdNET embeddings generalises better to complex multi-species
+soundscapes than knowledge distillation, and that dataset characteristics strongly modulate
+transfer performance --- a finding that directly motivates the Indian-specific fine-tuning strategy
+adopted here. Embedding-based approaches also enable direct estimation of call density in passive
+recordings without relying on fixed confidence thresholds~\cite{McGinn}.
+
+\vspace{0.3cm}
+
+\noindent
+\textbf{Noise Handling and Dataset Preparation.}
+Xie et al.\ \cite{Xie} provide a comprehensive review of bioacoustic signal denoising methods,
+covering classical signal processing techniques as well as modern deep learning approaches.
+Their review confirms that background noise remains a primary factor in degrading model
+performance. Standard bioacoustic preprocessing applies bandpass filtering, spectral subtraction,
+or energy-based segment gating, but these heuristics are manually tuned per site and treat
+preprocessing as a binary pass/fail gate with no mechanism to recover bird calls partially
+masked by noise~\cite{Stowell}. The iBC53 dataset used in this project, comprising passive
+acoustic recordings from an Indian urban landscape spanning 53 species, is described by
+Gupta et al.~\cite{iBC53}, providing ecologically grounded evaluation data.
+
+\vspace{0.3cm}
+
+\noindent
+\textbf{Hybrid Rule-Based and Learned Screening.}
+Hand-crafted features --- zero-crossing rate, spectral flatness, centroid stability --- reliably
+distinguish tonal bird calls from broadband noise or insect choruses. When combined with deep
+embedding classifiers, hybrid architectures offer interpretable, lightweight detection. Prior work
+has not documented the combination of subframe-level acoustic voting with BirdNET embeddings for
+Indian conditions. The Noise Segregation V2 module proposed here operationalises this hybrid
+approach through a weighted six-subframe voting scheme with harmonic structure checking.
+
+\vspace{0.3cm}
+
+\noindent
+\textbf{Out-of-Distribution Detection in Bioacoustics.}
+Standard classifiers fail under distribution shift by assigning overconfident probabilities to
+out-of-distribution noise. Ntalampiras and Potamitis~\cite{Ntalampiras} demonstrate
+reconstruction-error-based methods for detecting unknown bird species and anomalous acoustic
+events using autoencoder networks trained on known-class embeddings, where high reconstruction
+error signals out-of-distribution inputs. This principle directly motivates the autoencoder OOD
+rejection gate in the present system. The theoretical basis for autoencoder-based dimensionality
+reduction and anomaly detection is established by Hinton and Salakhutdinov~\cite{Hinton}.
+
+\vspace{0.3cm}
+
+\noindent
+\textbf{Active Learning for Bioacoustics.}
+Human annotation of PAM recordings is cost-prohibitive at scale. Kath et al.\ \cite{Kath} show
+that combining transfer learning with active learning significantly reduces annotation effort in
+passive acoustic monitoring. Rauch et al.\ \cite{Rauch} develop deep active learning strategies
+specifically for avian bioacoustics, demonstrating that uncertainty-based sample selection improves
+classifier calibration over iterative annotation cycles. Dumoulin et al.\ \cite{Dumoulin} further
+demonstrate that pre-computing embeddings and applying lightweight active learning classifiers
+allows rapid model adaptation with minimal expert effort. The three-band router proposed here
+concentrates uncertainty into an explicitly surfaced middle band, and automated hard-example
+mining exports curated sets of likely false positives and false negatives for expert review.
+
+\vspace{0.3cm}
+
+\noindent
+\textbf{Foundation Models and Loss Functions.}
+Pre-trained embedding models represent the current state of the art for bioacoustic
+classification~\cite{Stowell,Ghani}. The focal loss function introduced by Lin et al.\ \cite{FocalLoss}
+addresses class imbalance during classifier training by down-weighting easily classified examples;
+it is adopted here to improve sensitivity given the severe 38.5:1 class imbalance in the iBC53
+corpus.
+
+\vspace{0.3cm}
+
+\noindent
+Overall, the surveyed works collectively establish that deep learning and embedding-based transfer
+learning are highly effective for bird sound classification, while identifying persistent challenges
+around noise robustness and threshold calibration. The proposed system builds directly on these
+findings by coupling Noise Segregation V2 with Bird Guard and Bird Rescue, frozen BirdNET
+embeddings~\cite{BirdNET}, focal-loss MLP classification~\cite{FocalLoss}, autoencoder OOD
+gating~\cite{Ntalampiras,Hinton}, and three-band routing with active learning~\cite{Kath,Rauch}
+into a unified noise-aware pipeline specifically targeting Indian conditions.
+
+% ======================================================
+% CHAPTER 3
+% ======================================================
+\newpage
+\thispagestyle{plain}
+
+\begin{center}
+{\fontsize{18}{20}\bfseries CHAPTER 3}
+\end{center}
+
+\addcontentsline{toc}{section}{\textbf{CHAPTER 3}}
+
+\vspace{0.5cm}
+
+\setcounter{section}{0}
+\renewcommand{\thesection}{3.\arabic{section}}
+
+\section{Methodologies}
+
+\noindent
+The proposed bird sound classification system follows a structured methodology integrating six tightly
+coupled components: (1)~audio conditioning and RMS silence rejection; (2)~subframe-level Noise
+Segregation V2 with harmonic Bird Guard; (3)~MLP-based Bird Rescue for faint or masked calls;
+(4)~frozen BirdNET V2.4 embedding extraction~\cite{BirdNET}; (5)~focal-loss binary MLP
+classification~\cite{FocalLoss}; and (6)~autoencoder OOD rejection gating~\cite{Ntalampiras,Hinton}
+with three-band confidence routing and active learning support.
+
+\vspace{0.3cm}
+
+\noindent
+Recordings are converted to mono and resampled to 48~kHz (BirdNET V2.4 requirement), then
+partitioned into non-overlapping 3-second segments. Segments with RMS below $-40$~dB are discarded
+as near-silent. Each surviving segment is divided into six non-overlapping 0.5-second subframes,
+and five acoustic features are extracted per subframe: zero-crossing rate, spectral flatness,
+spectral centroid mean and standard deviation, and an insect-band autocorrelation periodicity
+flag. A weighted noise score determines each subframe's vote, and a majority vote across subframes
+labels the segment.
+
+\vspace{0.3cm}
+
+\noindent
+Before routing a segment to the noise class, a \textbf{Bird Guard} module checks for harmonic
+structure (harmonic ratio $> 0.3$) and spectral peak prominence (peak-to-median ratio $> 3.0$).
+Any segment passing either check is retained in the bird class despite a noise-majority vote.
+Segments labelled as noise and failing the Bird Guard undergo a \textbf{Bird Rescue} pass using
+a lightweight MLP; those with $P(\mathrm{bird}) \geq \tau_{\mathrm{rescue}}$ are recovered
+to the bird class.
+
+\vspace{0.3cm}
+
+\noindent
+Surviving segments are encoded by frozen BirdNET V2.4 via TFLite inference to yield
+1024-dimensional embeddings. A focal-loss binary MLP ($1024 \to 512 \to 256 \to 1$) is trained
+on these embeddings. An autoencoder OOD gate trained exclusively on bird embeddings uses
+per-sample reconstruction MSE with threshold $\tau_{\mathrm{AE}}$ at the 99th percentile of
+validation bird errors to reject out-of-distribution segments. The three-band router
+($\tau_{\mathrm{low}} = 0.3$, $\tau_{\mathrm{high}} = 0.7$) surfaces uncertain segments for
+human-in-the-loop active learning.
+
+\section{Mathematical Model}
+
+\noindent
+The proposed system is represented mathematically as a multi-stage pipeline consisting of
+preprocessing, noise segregation, feature extraction, classification, OOD gating, and
+three-band decision routing.
+
+\subsection{Audio Segmentation}
+
+\noindent
+Let the input audio signal be represented as $X = \{x_1, x_2, \ldots, x_n\}$. The signal is
+resampled to 48~kHz mono and divided into fixed-length 3-second non-overlapping segments:
+\[
+    X \rightarrow \{S_1, S_2, \ldots, S_k\}
+\]
+Any segment whose RMS energy falls below $-40$~dB is discarded before further processing.
+
+\subsection{Noise Segregation V2}
+
+\noindent
+Each segment $S_j$ is divided into six non-overlapping 0.5-second subframes. For each subframe
+$f_i$, five acoustic features are extracted and combined into a weighted noise score:
+\[
+    \mathrm{Score}(f_i) = w_{\mathrm{zcr}}\,\widehat{\mathrm{ZCR}}
+                      + w_{\mathrm{flat}}\,\widehat{\mathrm{Flat}}
+                      + w_{\mathrm{cflag}}\,\mathrm{CFlag}
+                      + w_{\mathrm{cstd}}\,\hat{\sigma}_c
+                      + w_{\mathrm{ins}}\,\mathrm{IFlag}
+\]
+where $\widehat{\mathrm{ZCR}}$ is the normalised zero-crossing rate, $\widehat{\mathrm{Flat}}$
+is the spectral flatness, $\mathrm{CFlag}$ and $\hat{\sigma}_c$ capture spectral centroid
+behaviour, and $\mathrm{IFlag}$ is an insect-band autocorrelation indicator. The weights
+$(w_{\mathrm{zcr}}, w_{\mathrm{flat}}, w_{\mathrm{cflag}}, w_{\mathrm{cstd}}, w_{\mathrm{ins}})
+= (0.25, 0.30, 0.15, 0.15, 0.15)$ reflect the relative discriminative power of each feature
+in Indian soundscapes.
+
+If $\mathrm{Score}(f_i)$ exceeds a configurable threshold, the subframe casts a noise vote;
+otherwise it is treated as bird-like. The segment label is determined by majority vote:
+\[
+    \mathrm{Label}(S_j) = \operatorname{mode}\bigl(\mathrm{vote}(f_1), \ldots, \mathrm{vote}(f_6)\bigr)
+\]
+
+\noindent
+\textbf{Bird Guard.} Before routing a noise-majority segment to the noise class, two acoustic
+signatures specific to bird vocalisations are checked: (a)~harmonic structure (harmonic ratio
+$> 0.3$), and (b)~spectral peak prominence (peak-to-median ratio $> 3.0$). Any segment passing
+either check is retained in the bird class.
+
+\subsection{Bird Rescue}
+
+\noindent
+Segments labelled as noise by Noise Segregation V2 and failing the Bird Guard undergo a
+second-chance classification using a lightweight MLP trained on the same embedding space.
+If the MLP assigns $P(\mathrm{bird}) \geq \tau_{\mathrm{rescue}}$, the segment is rescued
+to its species folder.
+
+\subsection{Feature Extraction (BirdNET V2.4 Embedding)}
+
+\noindent
+Each bird-labelled segment surviving the above stages is passed through the frozen BirdNET
+V2.4 TFLite model~\cite{BirdNET}. The penultimate global average pooling activation yields:
+\[
+    \mathbf{e}_j = \phi(S_j), \quad \mathbf{e}_j \in \mathbb{R}^{1024}
+\]
+
+\subsection{Focal-Loss MLP Classifier}
+
+\noindent
+The embedding is passed through an MLP with architecture $1024 \to 512 \to 256 \to 1$,
+with batch normalisation, ReLU, and dropout ($p = 0.3$) after each hidden layer, and
+sigmoid output activation. Training minimises the focal loss~\cite{FocalLoss}:
+\[
+    \mathcal{L} = -\alpha\,(1-p)^{\gamma}\,y\log(p)
+                  - (1-\alpha)\,p^{\gamma}\,(1-y)\log(1-p)
+\]
+with $\gamma = 2.0$.
+
+\subsection{Autoencoder OOD Rejection Gate}
+
+\noindent
+A symmetric bottleneck autoencoder ($1024 \to 128 \to 1024$)~\cite{Hinton} is trained
+exclusively on bird-only embeddings. The per-sample reconstruction MSE is~\cite{Ntalampiras}:
+\[
+    \varepsilon(\mathbf{e}_j) = \frac{1}{1024}\sum_{i=1}^{1024}
+                                \bigl(e_{ji} - \hat{e}_{ji}\bigr)^2
+\]
+The gating threshold $\tau_{\mathrm{AE}}$ is set at the 99th percentile of reconstruction
+errors on validation bird embeddings (empirically $\tau_{\mathrm{AE}} = 0.16975$ on iBC53).
+
+\subsection{Three-Band Decision Function and Active Learning}
+
+\noindent
+Final classification uses two fixed deployment thresholds:
+\[
+    \text{Output} =
+    \begin{cases}
+        \text{Bird},      & p \geq \tau_{\mathrm{high}} = 0.7 \\
+        \text{Noise},     & p \leq \tau_{\mathrm{low}}  = 0.3 \\
+        \text{Uncertain}, & \text{otherwise}
+    \end{cases}
+\]
+
+\section{System Architecture}
+
+\noindent
+The proposed system is designed as a structured pipeline for classifying bird sounds from
+environmental audio recordings. It integrates six stages as illustrated below.
+
+\subsection{Overall System Architecture}
+
+% ============================================================
+% FIG 1: Overall architecture -- compact, fits on one column
+% ============================================================
+\begin{figure}[H]
+\centering
+\resizebox{0.82\textwidth}{!}{%
+\begin{tikzpicture}[
+  node distance=0.50cm and 0.45cm,
+  box/.style={draw, rectangle, rounded corners, align=center,
+              text width=1.65cm, minimum height=0.58cm,
+              inner sep=2pt, font=\scriptsize},
+  dec/.style={draw, diamond, aspect=2.0, align=center,
+              text width=1.20cm, inner sep=1pt, font=\scriptsize,
+              minimum height=0.65cm},
+  arr/.style={->, thick},
+  grp/.style={draw, rounded corners=2pt, inner sep=4pt},
+  lbl/.style={font=\tiny\bfseries, anchor=west}
+]
+% LEFT COLUMN
+\node[box] (A) {Raw Audio\\iBC53/*.wav};
+\node[box, below=of A] (B) {Resample\\48\,kHz+Mono};
+\node[box, below=of B] (C) {3s Segments};
+\node[box, below=of C] (D) {RMS Reject\\$<{-40}$\,dB};
+\node[box, below=of D] (E) {Noise Seg V2\\6$\times$0.5s};
+\node[dec, below=of E] (F) {Bird Guard};
+\node[box, below=of F] (G) {Bird Rescue};
+\node[box, below=of G] (H) {BirdNET Emb\\1024-D};
+\node[box, below=of H] (I) {HDF5+CSV};
+% TRAIN
+\node[box, right=1.9cm of C] (J) {Split\\75/15/10};
+\node[box, below=of J] (K) {MLP\\$1024{\to}256{\to}1$};
+\node[box, below=of K] (L) {AE\\$1024{\to}128{\to}1024$};
+\node[box, below=of L] (M) {$\tau_{AE}$ P99};
+% INFER
+\node[dec, right=1.9cm of H] (N) {AE Gate};
+\node[box, below=of N] (O) {MSE$>\tau_{AE}$?};
+\node[box, below=of O] (P) {MLP $P(\text{bird})$};
+\node[dec, below=of P] (Q) {3-Band};
+\node[box, below left=0.65cm and 1.1cm of Q] (R) {Bird ${\ge}0.7$};
+\node[box, below=0.65cm of Q] (S) {Uncertain};
+\node[box, below right=0.65cm and 1.1cm of Q] (T) {Noise};
+% ARROWS
+\foreach \u/\v in {A/B,B/C,C/D,D/E,E/F,F/G,G/H,H/I}
+  \draw[arr] (\u)--(\v);
+\draw[arr] (I.east) -| (J.west);
+\foreach \u/\v in {J/K,K/L,L/M}
+  \draw[arr] (\u)--(\v);
+\draw[arr] (I.east) -| (N.west);
+\foreach \u/\v in {N/O,O/P,P/Q}
+  \draw[arr] (\u)--(\v);
+\draw[arr] (Q)--(R);
+\draw[arr] (Q)--(S);
+\draw[arr] (Q)--(T);
+\begin{scope}[on background layer]
+  \node[grp, fit=(A)] {};
+  \node[grp, fit=(B)(C)(D)(E)(F)(G)] {};
+  \node[grp, fit=(H)(I)] {};
+  \node[grp, fit=(J)(K)(L)(M)] {};
+  \node[grp, fit=(N)(O)(P)(Q)(R)(S)(T)] {};
+\end{scope}
+\end{tikzpicture}%
+}
+\vspace{-0.3em}
+\caption{End-to-end architecture of the proposed pipeline.}
+\label{fig:overall_architecture}
+\end{figure}
+
+% ============================================================
+% FIG 2: Training & Inference pipelines (unchanged -- these
+%         already use resizebox{\textwidth} and look fine)
+% ============================================================
+\begin{figure*}[H]
+    \centering
+    \subcaptionbox{Training pipeline: preprocessing, embedding extraction, stratified splitting, focal-loss MLP training, bird-only autoencoder training, P99 threshold selection, and held-out evaluation.}{%
+        \resizebox{\textwidth}{!}{%
+        \begin{tikzpicture}[node distance=0.40cm and 0.46cm]
+          \node[pipsmall,minimum width=2.2cm] (tA) {Raw Audio};
+          \node[pipsmall,minimum width=2.2cm,right=0.46cm of tA] (tB) {Preprocess\\+ V2 + Rescue};
+          \node[pipsmall,minimum width=2.4cm,right=0.46cm of tB] (tC) {Embed\\(BirdNET V2.4)};
+          \node[pipsmall,minimum width=2.7cm,right=0.46cm of tC] (tD) {Train/Val/Test\\Split 75/15/10};
+          \node[pipsmall,minimum width=2.7cm,right=0.46cm of tD] (tE) {Train MLP\\(Focal Loss $\gamma{=}2$)};
+          \node[pipsmall,minimum width=2.7cm,right=0.46cm of tE] (tF) {Train AE\\(Bird-Only)};
+          \node[pipsmall,minimum width=2.9cm,right=0.46cm of tF] (tG) {Compute $\tau_\text{AE}$\\(P99 Threshold)};
+          \node[pipsmall,minimum width=2.5cm,right=0.46cm of tG] (tH) {Evaluate\\(Test Split)};
+          \node[pipsmall,minimum width=2.9cm,right=0.46cm of tH] (tI) {Benchmark\\(3-Way Compare)};
+          \draw[arr](tA)--(tB);\draw[arr](tB)--(tC);\draw[arr](tC)--(tD);
+          \draw[arr](tD)--(tE);\draw[arr](tE)--(tF);\draw[arr](tF)--(tG);
+          \draw[arr](tG)--(tH);\draw[arr](tH)--(tI);
+        \end{tikzpicture}%
+        }%
+    }
+
+    \vspace{0.6em}
+
+    \subcaptionbox{Inference pipeline: preprocessing and embedding extraction followed by autoencoder-based OOD rejection and MLP-based three-band routing into bird, uncertain, and noise outputs.}{%
+        \resizebox{\textwidth}{!}{%
+        \begin{tikzpicture}[node distance=0.40cm and 0.48cm]
+          \node[pipsmall,minimum width=2.2cm] (iA) {New Audio};
+          \node[pipsmall,minimum width=3.2cm,right=0.48cm of iA] (iB) {Preprocess\\+ V2 + Bird Guard\\+ Bird Rescue};
+          \node[pipsmall,minimum width=2.4cm,right=0.48cm of iB] (iC) {BirdNET V2.4\\Embed};
+          \node[pipdec,right=0.50cm of iC] (iD)
+                {AE Gate\\MSE$>\tau_\text{AE}$?};
+          \node[pipsmall,minimum width=2.4cm,right=0.50cm of iD] (iF)
+                {MLP\\$P(\text{bird})$};
+          \node[pipdec,right=0.50cm of iF] (iG)
+                {Three-Band};
+          \node[pipsmall,minimum width=2.2cm,above right=0.56cm and 0.50cm of iG] (iH)
+                {$\to$ Bird\\{\scriptsize $\geq\!0.7$}};
+          \node[pipsmall,minimum width=2.6cm,right=0.50cm of iG] (iI)
+                {$\to$ Uncertain\\{\scriptsize $0.3$--$0.7$}};
+          \node[pipsmall,minimum width=2.2cm,below right=0.56cm and 0.50cm of iG] (iE)
+                {$\to$ Noise\\{\scriptsize $\leq\!0.3$/OOD}};
+          \draw[arr](iA)--(iB);\draw[arr](iB)--(iC);\draw[arr](iC)--(iD);
+          \draw[arr](iD)--node[above,font=\scriptsize]{In-Dist}(iF);
+          \draw[arr](iF)--(iG);
+          \draw[arr](iG)--(iH) node[midway,above,font=\scriptsize]{$\geq\!0.7$};
+          \draw[arr](iG)--(iI) node[midway,above,font=\scriptsize]{$0.3$--$0.7$};
+          \draw[arr](iG)--(iE) node[midway,below,font=\scriptsize]{$\leq\!0.3$};
+          \draw[arrd](iD.south)--++(0,-0.46)-|(iE.south)
+                node[pos=0.05,right,font=\scriptsize]{OOD};
+        \end{tikzpicture}%
+        }%
+    }
+    \caption{Training and inference pipeline diagrams.}
+    \label{fig:pipeline_train_infer}
+\end{figure*}
+
+% ============================================================
+% FIG 3: Detailed architecture -- FIXED: smaller scale,
+%         resizebox wrapper, compact node sizes
+% ============================================================
+\begin{figure}[H]
+\centering
+\resizebox{0.90\textwidth}{!}{%
+\begin{tikzpicture}[
+  scale=0.72, transform shape,
+  node distance=0.60cm and 0.55cm,
+  box/.style={draw, rectangle, rounded corners, align=center,
+              text width=1.80cm, minimum width=1.80cm, minimum height=0.60cm,
+              inner sep=2pt, font=\scriptsize},
+  dec/.style={draw, diamond, aspect=2.1, align=center,
+              text width=1.40cm, inner sep=1pt, font=\scriptsize},
+  arr/.style={->, thick},
+  grp/.style={draw, rounded corners=2pt, inner sep=5pt},
+  lbl/.style={font=\small\bfseries, anchor=west}
+]
+
+% LEFT COLUMN
+\node[box] (A) {Raw Audio\\iBC53/*.wav};
+\node[box, below=of A] (B) {Resample\\48\,kHz+Mono};
+\node[box, below=of B] (C) {3s Segments};
+\node[box, below=of C] (D) {RMS Reject\\$<{-40}$\,dB};
+\node[box, below=of D] (E) {Noise Seg V2\\6$\times$0.5s scoring};
+\node[dec, below=of E] (F) {Bird Guard\\Harmonic+\\Peak Check};
+\node[box, below=of F] (G) {Bird Rescue\\MLP re-check};
+\node[box, below=of G] (H) {BirdNET V2.4\\1024-D Embedding};
+\node[box, below=of H] (I) {HDF5+manifest.csv};
+
+% RIGHT COLUMN: TRAIN
+\node[box, right=2.6cm of C] (J) {Stratified Split\\75\%/15\%/10\%};
+\node[box, below=of J] (K) {Focal-Loss MLP\\$1024{\to}512{\to}256{\to}1$};
+\node[box, below=of K] (L) {Bird-Only AE\\$1024{\to}128{\to}1024$};
+\node[box, below=of L] (M) {$\tau_{\mathrm{AE}}$ P99\\val bird MSE};
+
+% RIGHT COLUMN: INFER
+\node[dec, right=2.6cm of H] (N) {AE Recon\\Gate};
+\node[box, below=of N] (O) {MSE$>\tau_{\mathrm{AE}}$?};
+\node[box, below=of O] (P) {MLP\\$P(\mathrm{bird})$};
+\node[dec, below=of P] (Q) {3-Band\\Routing};
+
+\node[box, below left=0.75cm and 1.5cm of Q] (R) {Bird\\$P{\ge}0.7$};
+\node[box, below=0.75cm of Q] (S) {Uncertain\\$0.3{<}P{<}0.7$};
+\node[box, below right=0.75cm and 1.5cm of Q] (T) {Noise\\$P{\le}0.3$/OOD};
+
+\draw[arr] (A)--(B); \draw[arr] (B)--(C); \draw[arr] (C)--(D);
+\draw[arr] (D)--(E); \draw[arr] (E)--(F);
+\draw[arr] (F)--node[near start,right,font=\tiny]{Bird-like}(G);
+\draw[arr] (G)--(H); \draw[arr] (H)--(I);
+
+\draw[arr] (I.east) -| (J.west);
+\draw[arr] (J)--(K); \draw[arr] (K)--(L); \draw[arr] (L)--(M);
+
+\draw[arr] (I.east) -| (N.west);
+\draw[arr] (N)--(O);
+\draw[arr] (O)--node[near start,right,font=\tiny]{No}(P);
+\draw[arr] (O.east) -| node[pos=0.25,right,font=\tiny]{Yes(OOD)}(T);
+\draw[arr] (P)--(Q);
+\draw[arr] (Q)--node[near start,left,font=\tiny]{High}(R);
+\draw[arr] (Q)--node[right,font=\tiny]{Unc.}(S);
+\draw[arr] (Q)--node[near start,right,font=\tiny]{Low}(T);
+
+\begin{scope}[on background layer]
+  \node[grp, fit=(A)] (gINPUT) {};
+  \node[grp, fit=(B)(C)(D)(E)(F)(G)] (gPRE) {};
+  \node[grp, fit=(H)(I)] (gEMB) {};
+  \node[grp, fit=(J)(K)(L)(M)] (gTRAIN) {};
+  \node[grp, fit=(N)(O)(P)(Q)(R)(S)(T)] (gINFER) {};
+\end{scope}
+\node[lbl, above left=1mm and 0mm of gINPUT.north west] {INPUT};
+\node[lbl, above left=1mm and 0mm of gPRE.north west] {PREPROCESS};
+\node[lbl, above left=1mm and 0mm of gEMB.north west] {EMBED};
+\node[lbl, above left=1mm and 0mm of gTRAIN.north west] {TRAIN};
+\node[lbl, above left=1mm and 0mm of gINFER.north west] {INFER / OUTPUT};
+
+\end{tikzpicture}%
+}% end resizebox
+\vspace{-0.3em}
+\caption{End-to-end architecture of the proposed noise-aware bird sound classification pipeline,
+showing preprocessing (with Bird Guard and Bird Rescue), embedding extraction, training, and
+inference with three-band routing and autoencoder OOD gating.}
+\label{fig:detailed_architecture}
+\end{figure}
+
+\subsection{Noise Segregation V2, Bird Guard, and Bird Rescue}
+
+\noindent
+In the initial stage, raw audio recordings are standardized and divided into fixed-length
+3-second segments. Each segment is further split into six 0.5-second subframes. Acoustic
+features --- zero-crossing rate, spectral flatness, spectral centroid (mean and std), and
+insect-band autocorrelation --- are extracted from each subframe. A weighted noise score is
+computed and each subframe votes bird or noise; a majority vote across subframes determines
+the segment label. Before routing a noise-majority segment to the noise class, the Bird Guard
+checks for harmonic structure and spectral peak prominence. Segments failing both checks are
+then subjected to the Bird Rescue MLP re-check.
+
+% ============================================================
+% FIG 4: Preprocessing flow -- compact version
+% ============================================================
+\begin{figure}[H]
+\centering
+\resizebox{0.95\textwidth}{!}{%
+\begin{tikzpicture}[
+node distance=0.75cm and 1.2cm,
+every node/.style={
+draw, rectangle, rounded corners,
+minimum width=2.0cm, minimum height=0.62cm,
+align=center, font=\small
+},
+arrow/.style={->, thick}
+]
+  \node (A) {Raw .wav};
+  \node (B) [right=of A] {48\,kHz Mono};
+  \node (C) [right=of B] {3\,s Segments};
+  \node[diamond, aspect=2.1, minimum width=2.0cm, minimum height=0.80cm] (D) [right=of C]
+        {RMS $>$\\$-40$\,dB?};
+  \node (E) [below=of D] {Discard};
+  \node (F) [right=of D] {V2 Score\\6 subframes};
+  \node[diamond, aspect=2.1, minimum width=2.0cm, minimum height=0.80cm] (G) [right=of F]
+        {Bird Guard\\Pass?};
+  \node (H) [right=of G] {$\to$ species/};
+  \node[diamond, aspect=2.1, minimum width=2.0cm, minimum height=0.80cm] (I) [below=of G]
+        {Bird Rescue\\MLP?};
+  \node (J) [below=of I] {$\to$ noise/};
+
+  \draw[arrow] (A)--(B); \draw[arrow] (B)--(C); \draw[arrow] (C)--(D);
+  \draw[arrow] (D)--node[right,font=\scriptsize]{No}(E);
+  \draw[arrow] (D)--node[above,font=\scriptsize]{Yes}(F);
+  \draw[arrow] (F)--(G);
+  \draw[arrow] (G)--node[above,font=\scriptsize]{Harmonic/Tonal}(H);
+  \draw[arrow] (G)--node[right,font=\scriptsize]{Noise-like}(I);
+  \draw[arrow] (I.east) -| node[pos=0.25,right,font=\scriptsize]{$P{\ge}\tau$}(H.south);
+  \draw[arrow] (I)--node[right,font=\scriptsize]{$P{<}\tau$}(J);
+
+  \begin{scope}[on background layer]
+    \node[draw, dashed, inner sep=4pt, fit=(B)(C)(D)(E)] (gPre) {};
+    \node[draw, dashed, inner sep=4pt, fit=(F)(G)(I)(J)(H)] (gNS) {};
+  \end{scope}
+  \node[draw=none, font=\small\bfseries, anchor=west] at (gPre.north west) {Preprocessing};
+  \node[draw=none, font=\small\bfseries, anchor=west] at (gNS.north west) {Noise Seg V2 + Bird Guard + Bird Rescue};
+\end{tikzpicture}%
+}
+\vspace{-0.5em}
+\caption{Preprocessing and noise segregation workflow.}
+\label{fig:preprocess}
+\end{figure}
+
+\subsection{Feature Extraction and Model Architecture}
+
+\noindent
+After noise filtering, bird-labelled segments are encoded by frozen BirdNET V2.4 via TFLite
+inference to yield 1024-dimensional embeddings~\cite{BirdNET}. These embeddings are passed into
+the focal-loss MLP classifier~\cite{FocalLoss}. A symmetric bottleneck autoencoder trained
+exclusively on bird embeddings provides reconstruction-error gating ($\tau_{\mathrm{AE}} = 0.16975$,
+P99 of validation bird MSE) to reject OOD segments before classification~\cite{Ntalampiras,Hinton}.
+
+% ============================================================
+% FIG 5: Model arch -- compact version
+% ============================================================
+\begin{figure}[H]
+\centering
+\resizebox{0.95\textwidth}{!}{%
+\begin{tikzpicture}[
+node distance=0.75cm and 1.2cm,
+every node/.style={
+draw, rectangle, rounded corners,
+minimum width=2.0cm, minimum height=0.62cm,
+align=center, font=\small
+},
+arrow/.style={->, thick}
+]
+  \node (in) {Bird-labelled\\3\,s segment};
+  \node (emb) [right=of in] {BirdNET V2.4\\Embed $\mathbb{R}^{1024}$};
+  \node (ae) [below=of emb] {Bird-only AE\\$1024{\to}128{\to}1024$};
+  \node[diamond, aspect=2.1, minimum width=2.0cm, minimum height=0.80cm]
+       (gate) [below=of ae] {MSE$>\tau_{\mathrm{AE}}$?};
+  \node (ood) [below=of gate] {Reject (OOD)};
+  \node (mlp) [right=of emb] {MLP\\$1024{\to}512{\to}256{\to}1$\\Focal $\gamma{=}2$};
+  \node (prob) [right=of mlp] {$P(\mathrm{bird})$};
+
+  \draw[arrow] (in)--(emb); \draw[arrow] (emb)--(mlp); \draw[arrow] (mlp)--(prob);
+  \draw[arrow] (emb)--(ae); \draw[arrow] (ae)--(gate);
+  \draw[arrow] (gate)--node[right,font=\scriptsize]{Yes}(ood);
+  \draw[arrow] (gate.east) -| node[pos=0.25,above,font=\scriptsize]{No}(mlp.south);
+
+  \begin{scope}[on background layer]
+    \node[draw, dashed, inner sep=4pt, fit=(emb)] (gEmb) {};
+    \node[draw, dashed, inner sep=4pt, fit=(ae)(gate)(ood)] (gVal) {};
+    \node[draw, dashed, inner sep=4pt, fit=(mlp)(prob)] (gCls) {};
+  \end{scope}
+  \node[draw=none, font=\small\bfseries, anchor=west] at (gEmb.north west) {Embedding};
+  \node[draw=none, font=\small\bfseries, anchor=west] at (gVal.north west) {OOD Gate (P99)};
+  \node[draw=none, font=\small\bfseries, anchor=west] at (gCls.north west) {Classification};
+\end{tikzpicture}%
+}
+\vspace{-0.5em}
+\caption{Embedding extraction, P99-thresholded autoencoder OOD gate, and focal-loss MLP.}
+\label{fig:model_arch}
+\end{figure}
+
+\subsection{Decision and Inference Flow}
+
+\noindent
+During inference, if the autoencoder gate is enabled, reconstruction MSE is evaluated first;
+segments exceeding $\tau_{\mathrm{AE}} = 0.16975$ (P99) are directly classified as noise (OOD).
+Surviving segments are scored by the MLP and routed using $\tau_{\mathrm{low}} = 0.3$ and
+$\tau_{\mathrm{high}} = 0.7$ into confident bird, confident noise, or uncertain bands.
+
+% ============================================================
+% FIG 6: Decision flow -- compact version
+% ============================================================
+\begin{figure}[H]
+\centering
+\resizebox{0.95\textwidth}{!}{%
+\begin{tikzpicture}[
+node distance=0.75cm and 1.2cm,
+every node/.style={
+draw, rectangle, rounded corners,
+minimum width=2.0cm, minimum height=0.62cm,
+align=center, font=\small
+},
+arrow/.style={->, thick}
+]
+  \node (start) {Embedding\\$\mathbf{e}{\in}\mathbb{R}^{1024}$};
+  \node[diamond, aspect=2.1, minimum width=2.0cm, minimum height=0.80cm]
+       (gate) [right=of start] {AE Gate\\Enabled?};
+  \node (mse) [below=of gate] {Compute MSE};
+  \node[diamond, aspect=2.1, minimum width=2.0cm, minimum height=0.80cm]
+       (cmp) [below=of mse] {MSE$>\tau_{\mathrm{AE}}$?};
+  \node (noise1) [below=of cmp] {Noise (OOD)};
+  \node (mlp) [right=of gate] {MLP $P(\mathrm{bird})$};
+  \node[diamond, aspect=2.1, minimum width=2.0cm, minimum height=0.80cm]
+       (band) [right=of mlp] {3-Band};
+  \node (bird) [above right=of band] {Bird $P{\ge}0.7$};
+  \node (unc) [right=of band] {Uncertain};
+  \node (noise2) [below right=of band] {Noise $P{\le}0.3$};
+
+  \draw[arrow] (start)--(gate);
+  \draw[arrow] (gate)--node[above,font=\scriptsize]{No}(mlp);
+  \draw[arrow] (gate)--node[right,font=\scriptsize]{Yes}(mse);
+  \draw[arrow] (mse)--(cmp);
+  \draw[arrow] (cmp)--node[right,font=\scriptsize]{Yes}(noise1);
+  \draw[arrow] (cmp.east) -| node[pos=0.25,above,font=\scriptsize]{No}(mlp.south);
+  \draw[arrow] (mlp)--(band);
+  \draw[arrow] (band)--(bird);
+  \draw[arrow] (band)--(unc);
+  \draw[arrow] (band)--(noise2);
+
+  \begin{scope}[on background layer]
+    \node[draw, dashed, inner sep=4pt, fit=(start)(gate)] (gIn) {};
+    \node[draw, dashed, inner sep=4pt, fit=(mse)(cmp)(noise1)] (gAE) {};
+    \node[draw, dashed, inner sep=4pt, fit=(mlp)(band)(bird)(unc)(noise2)] (gMLP) {};
+  \end{scope}
+  \node[draw=none, font=\small\bfseries, anchor=west] at (gIn.north west) {Input};
+  \node[draw=none, font=\small\bfseries, anchor=west] at (gAE.north west) {OOD Gate (P99)};
+  \node[draw=none, font=\small\bfseries, anchor=west] at (gMLP.north west) {Three-Band Routing};
+\end{tikzpicture}%
+}
+\vspace{-0.5em}
+\caption{Inference-time decision flow with P99 autoencoder OOD gate and three-band routing
+($\tau_{\mathrm{low}} = 0.3$, $\tau_{\mathrm{high}} = 0.7$).}
+\label{fig:decision_flow}
+\end{figure}
+
+\section{Algorithms}
+
+\begin{algorithm}[H]
+\caption{Preprocessing, Noise Segregation V2, Bird Guard, and Bird Rescue}
+\begin{algorithmic}[1]
+\STATE Load raw audio files from the iBC53 corpus
+\STATE Resample all recordings to 48~kHz mono
+\STATE Segment each recording into non-overlapping 3-second clips
+\FOR{each segment $S_j$}
+    \STATE Compute RMS energy of $S_j$
+    \IF{RMS energy $<$ $-40$~dB}
+        \STATE Discard segment (near-silent)
+    \ELSE
+        \STATE Divide $S_j$ into six 0.5-second subframes
+        \FOR{each subframe $f_i$}
+            \STATE Extract ZCR, spectral flatness, spectral centroid (mean \& std), insect-band autocorrelation (IFlag)
+            \STATE Compute weighted score:
+                   $\mathrm{Score}(f_i) = 0.25\,\widehat{\mathrm{ZCR}}
+                   + 0.30\,\widehat{\mathrm{Flat}}
+                   + 0.15\,\mathrm{CFlag}
+                   + 0.15\,\hat{\sigma}_c
+                   + 0.15\,\mathrm{IFlag}$
+            \IF{$\mathrm{Score}(f_i) >$ configurable threshold}
+                \STATE Subframe votes \textit{noise}
+            \ELSE
+                \STATE Subframe votes \textit{bird}
+            \ENDIF
+        \ENDFOR
+        \STATE Apply majority vote: $\mathrm{Label}(S_j) = \operatorname{mode}(\mathrm{vote}(f_1),\ldots,\mathrm{vote}(f_6))$
+        \IF{$\mathrm{Label}(S_j) = \text{noise}$}
+            \STATE \textbf{Bird Guard}: check harmonic ratio $> 0.3$ \textbf{OR} peak-to-median ratio $> 3.0$
+            \IF{either check passes}
+                \STATE Override label to \textit{bird} $\to$ route to species folder
+            \ELSE
+                \STATE \textbf{Bird Rescue}: run lightweight MLP; compute $P(\mathrm{bird})$
+                \IF{$P(\mathrm{bird}) \geq \tau_{\mathrm{rescue}}$}
+                    \STATE Rescue segment $\to$ species folder
+                \ELSE
+                    \STATE Confirm \textit{noise} $\to$ noise corpus
+                \ENDIF
+            \ENDIF
+        \ELSE
+            \STATE Route to species folder
+        \ENDIF
+    \ENDIF
+\ENDFOR
+\end{algorithmic}
+\end{algorithm}
+
+\vspace{0.4cm}
+
+\begin{algorithm}[H]
+\caption{BirdNET V2.4 Embedding Extraction}
+\begin{algorithmic}[1]
+\STATE Load frozen BirdNET V2.4 TFLite model~\cite{BirdNET}
+\FOR{each bird-labelled segment $S_j$}
+    \STATE Extract penultimate global average pooling activation:
+           $\mathbf{e}_j = \phi(S_j) \in \mathbb{R}^{1024}$
+    \STATE Store embedding with metadata in HDF5 manifest
+\ENDFOR
+\STATE Build stratified train/validation/test split (75\% / 15\% / 10\%)
+\end{algorithmic}
+\end{algorithm}
+
+\vspace{0.4cm}
+
+\begin{algorithm}[H]
+\caption{Focal-Loss MLP Classifier Training}
+\begin{algorithmic}[1]
+\STATE Load embeddings and binary labels (bird=1, noise=0)
+\STATE Initialize MLP: $1024 \to 512 \to 256 \to 1$ with batch normalisation, ReLU, dropout ($p=0.3$)
+\FOR{each epoch (up to 50)}
+    \STATE Forward pass; compute sigmoid output probability $p$
+    \STATE Compute focal loss~\cite{FocalLoss} with $\gamma=2.0$:
+           $\mathcal{L} = -\alpha(1-p)^{2}y\log p
+           - (1-\alpha)p^{2}(1-y)\log(1-p)$
+    \STATE Backpropagate and update weights (Adam optimizer, cosine-annealing schedule)
+    \IF{validation F1 does not improve for 7 consecutive epochs}
+        \STATE Early stopping
+    \ENDIF
+\ENDFOR
+\STATE Sweep 50 candidate thresholds on validation set; save F1-optimal threshold
+\end{algorithmic}
+\end{algorithm}
+
+\vspace{0.4cm}
+
+\begin{algorithm}[H]
+\caption{Autoencoder OOD Gate Training (P99 Threshold)}
+\begin{algorithmic}[1]
+\STATE Select bird-only embeddings from training split
+\STATE Initialize symmetric autoencoder ($1024 \to 128 \to 1024$)~\cite{Hinton}
+\FOR{each epoch (up to 30)}
+    \STATE Encode embedding $\mathbf{e}_j$; reconstruct $\hat{\mathbf{e}}_j$
+    \STATE Compute MSE loss: $\varepsilon = \frac{1}{1024}\|\mathbf{e}_j - \hat{\mathbf{e}}_j\|^2$
+    \STATE Update weights
+\ENDFOR
+\STATE Set $\tau_{\mathrm{AE}}$ = P99 of reconstruction errors on validation bird embeddings
+       ($\tau_{\mathrm{AE}} = 0.16975$ on iBC53)
+\end{algorithmic}
+\end{algorithm}
+
+\vspace{0.4cm}
+
+\begin{algorithm}[H]
+\caption{Inference with Three-Band Routing and OOD Gate}
+\begin{algorithmic}[1]
+\FOR{each input segment}
+    \STATE Extract embedding $\mathbf{e}_j = \phi(S_j)$
+    \IF{autoencoder gate enabled}
+        \STATE Compute $\varepsilon(\mathbf{e}_j) = \frac{1}{1024}\|\mathbf{e}_j - \hat{\mathbf{e}}_j\|^2$
+        \IF{$\varepsilon(\mathbf{e}_j) > \tau_{\mathrm{AE}} = 0.16975$}
+            \STATE Route to \textbf{Noise} (OOD rejection); \textbf{skip} MLP
+        \ENDIF
+    \ENDIF
+    \STATE Compute MLP probability $p$
+    \IF{$p \geq \tau_{\mathrm{high}} = 0.7$}
+        \STATE Route to \textbf{Confident Bird}
+    \ELSIF{$p \leq \tau_{\mathrm{low}} = 0.3$}
+        \STATE Route to \textbf{Confident Noise}
+    \ELSE
+        \STATE Route to \textbf{Uncertain} $\rightarrow$ human review queue
+    \ENDIF
+\ENDFOR
+\end{algorithmic}
+\end{algorithm}
+
+\vspace{0.4cm}
+
+\begin{algorithm}[H]
+\caption{Active Learning and Hard-Example Mining}
+\begin{algorithmic}[1]
+\STATE Scan uncertain-band and noise output directories for candidate false positives/negatives
+\STATE Export curated sets for expert annotation~\cite{Kath,Rauch}
+\STATE Update dataset with corrected labels
+\STATE Retrain MLP (and autoencoder if needed) on augmented dataset
+\STATE Repeat until performance converges on held-out evaluation
+\end{algorithmic}
+\end{algorithm}
+
+\section{Summary}
+
+\noindent
+This chapter presented the complete methodology of the proposed noise-aware bird sound
+classification system. The pipeline encompasses audio preprocessing with RMS-based silence
+removal, Noise Segregation V2 with six-subframe weighted acoustic voting, harmonic Bird Guard
+checking, MLP-based Bird Rescue for faint or masked calls, frozen BirdNET V2.4 embedding
+extraction (1024-D)~\cite{BirdNET}, focal-loss MLP training ($\gamma = 2.0$)~\cite{FocalLoss},
+P99-thresholded autoencoder OOD rejection gating ($\tau_{\mathrm{AE}} = 0.16975$)~\cite{Ntalampiras,Hinton},
+three-band decision routing ($\tau_{\mathrm{low}} = 0.3$, $\tau_{\mathrm{high}} = 0.7$), and
+active learning with automated hard-example mining~\cite{Kath,Rauch}.
+
+% ======================================================
+% CHAPTER 4
+% ======================================================
+\newpage
+\thispagestyle{plain}
+
+\begin{center}
+{\fontsize{18}{20}\bfseries CHAPTER 4}
+\end{center}
+
+\addcontentsline{toc}{section}{\textbf{CHAPTER 4}}
+
+\vspace{0.5cm}
+
+\setcounter{section}{0}
+\renewcommand{\thesection}{4.\arabic{section}}
+
+\section{Experimental Setup}
+
+\subsection{Dataset: iBC53}
+
+\noindent
+The iBC53 corpus~\cite{iBC53} contains recordings of 53 Indian bird species gathered under varying
+urban and peri-urban conditions around Bengaluru. After resampling, segmentation (3\,s non-overlapping),
+RMS silence removal, Noise Segregation V2, Bird Guard, and Bird Rescue, the pipeline yields
+\textbf{9,790 bird-labelled} and \textbf{254 noise-labelled} segments (10,044 total). The severe
+class imbalance ($\approx 38.5{:}1$) motivates the use of focal loss~\cite{FocalLoss}.
+
+\subsection{Splits and Evaluation Protocol}
+
+\noindent
+Stratified sampling divides the corpus 75\%/15\%/10\% into train, validation, and test sets,
+preserving class balance in each split. The BirdNET confidence baseline~\cite{BirdNET} is evaluated
+on the full manifest by assigning the maximum per-segment species detection confidence and thresholding at 0.5.
+
+\subsection{Baselines and Ablations}
+
+\noindent
+Three systems are compared: (1)~\textbf{BirdNET Baseline}~\cite{BirdNET}: maximum species
+confidence $\geq 0.5$; (2)~\textbf{Pipeline (MLP Only)}: frozen BirdNET embeddings through the
+trained focal-loss MLP~\cite{FocalLoss} at probability threshold 0.5; (3)~\textbf{Pipeline $+$ AE Gate}:
+autoencoder OOD rejection~\cite{Ntalampiras,Hinton} ($\tau_{\mathrm{AE}} = 0.16975$, P99) preceding the MLP.
+
+\subsection{Computational Environment}
+
+\noindent
+All experiments run on commodity CPU hardware without a dedicated GPU. BirdNET inference is
+executed via the TFLite runtime; MLP and autoencoder training use PyTorch. The pipeline is
+cross-platform and reproducible via a single \texttt{config.yaml} entry point.
+
+\section{Experimental Results}
+
+\subsection{Performance Metrics}
+
+\noindent
+Standard binary classification metrics are used: Accuracy, Precision, Recall, F1 Score,
+False-Positive Rate (FPR), False-Negative Rate (FNR), ROC-AUC, and PR-AUC.
+Statistical significance is assessed via paired $t$-test and Wilcoxon signed-rank test at $p < 0.05$.
+
+\subsection{Three-Way Quantitative Benchmark}
+
+\begin{table}[H]
+\centering
+\caption{Three-Way Benchmark on iBC53 (10,044 Segments: 9,790 Bird / 254 Noise).}
+\label{tab:results}
+\vspace{0.3cm}
+\renewcommand{\arraystretch}{1.3}
+\setlength{\tabcolsep}{6pt}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{|l|c|c|c|c|c|}
+\hline
+\textbf{Metric} & \textbf{BirdNET Baseline} & \textbf{MLP Only} & \textbf{MLP$+$AE Gate} &
+\textbf{$\Delta$ (Base$\to$MLP)} & \textbf{$\Delta$ (Base$\to$MLP$+$AE)} \\
+\hline
+Accuracy                          & 0.440 & \textbf{0.999} & 0.995 & $+0.559$ & $+0.555$ \\
+\hline
+Precision                         & 0.998 & \textbf{0.999} & \textbf{0.999} & $+0.001$ & $+0.001$ \\
+\hline
+Recall                            & 0.426 & \textbf{1.000} & 0.996 & $+0.574$ & $+0.570$ \\
+\hline
+F1 Score                          & 0.598 & \textbf{1.000} & 0.998 & $+0.402$ & $+0.400$ \\
+\hline
+False-Positive Rate (noise$\to$bird) & 0.0276 & \textbf{0.0197} & \textbf{0.0197} & $-0.0079$ & $-0.0079$ \\
+\hline
+False-Negative Rate (bird missed) & 0.5735 & \textbf{0.0004} & 0.0043 & $-0.5731$ & $-0.5692$ \\
+\hline
+ROC-AUC (test split)              & 0.724 & \textbf{0.998} & 0.9942 & $+0.274$ & $+0.270$ \\
+\hline
+PR-AUC (test split)               & 0.9923 & \textbf{0.9999} & 0.9998 & $+0.008$ & $+0.008$ \\
+\hline
+\end{tabular}%
+}
+\end{table}
+
+\noindent
+The BirdNET baseline~\cite{BirdNET} achieves only 0.440 accuracy and 0.598 F1, with a
+catastrophically high FNR of 57.4\%. The MLP-only pipeline reverses this: recall jumps to
+1.000, FNR falls to \textbf{0.04\%}, and accuracy reaches \textbf{0.999}. Adding the autoencoder
+gate (MLP$+$AE) incurs a modest recall cost of 0.4\% but provides an OOD safety layer~\cite{Ntalampiras}.
+ROC-AUC improves from 0.724 to 0.998 (MLP only) and 0.9942 (MLP$+$AE).
+
+\subsection{Statistical Validation}
+
+\noindent
+Paired $t$-test and Wilcoxon signed-rank test on per-segment correctness confirm that all
+improvements over the BirdNET baseline are statistically significant at $\mathbf{p < 0.05}$.
+
+\subsection{Performance Visualization}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\linewidth]{images/Performance baseline vs noise aware .jpeg}
+\caption{Three-way performance comparison on iBC53 ($N=10{,}044$).}
+\label{fig:performance}
+\end{figure}
+
+\subsection{Error Rate Analysis}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\linewidth]{images/Error rates .jpeg}
+\caption{Error-rate comparison (FPR and FNR) across all three systems on iBC53.}
+\label{fig:error}
+\end{figure}
+
+\subsection{Confusion Matrix Analysis}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\linewidth]{images/baseline, AE,MLP confuion matrices.jpeg}
+\caption{Confusion matrices for all three systems on iBC53 ($N=10{,}044$).}
+\label{fig:confusion_matrices}
+\end{figure}
+
+\subsection{ROC and Precision--Recall Curves}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\linewidth]{images/ROC Curves.jpeg}
+\caption{ROC curves: BirdNET (AUC~0.724), MLP Only (AUC~0.998), MLP$+$AE Gate (AUC~0.9942).}
+\label{fig:roc_curves}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\linewidth]{images/Precison-Recall curves .jpeg}
+\caption{Precision--recall curves: MLP Only (PR-AUC~0.9999), MLP$+$AE Gate (PR-AUC~0.9998).}
+\label{fig:pr_curves}
+\end{figure}
+
+\subsection{Autoencoder Reconstruction Error Distribution}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\linewidth]{images/Autoencoder reconstruction error .jpeg}
+\caption{Autoencoder reconstruction MSE histogram. Dashed line marks $\tau_{\mathrm{AE}} = 0.16975$ (P99).}
+\label{fig:ae_recon_error}
+\end{figure}
+
+\subsection{Embedding Space Visualization}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\linewidth]{images/PCA.jpeg}
+\caption{PCA projection of BirdNET embeddings (green = bird, blue = noise).}
+\label{fig:pca}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\linewidth]{images/t-SNE.jpeg}
+\caption{t-SNE projection ($n = 800$, perplexity 30). OOD-rejected segments (orange) at periphery.}
+\label{fig:tsne}
+\end{figure}
+
+\subsection{MLP Feature Attribution Analysis}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\linewidth]{images/MLP Attribution.jpeg}
+\caption{MLP attribution across 1024 BirdNET embedding dimensions.}
+\label{fig:mlp_attr}
+\end{figure}
+
+\subsection{Qualitative Error Analysis}
+
+\noindent
+The BirdNET baseline's 5,615 false negatives predominantly arise from: (1)~Indian-endemic species
+absent from BirdNET's training data~\cite{WoodKahl}; (2)~forest recordings with dense insect chorus
+masking calls; and (3)~short or atypical calls. The MLP recovers nearly all of these by learning
+from embedding geometry rather than species identity. The 42 residual false negatives in the
+MLP$+$AE configuration are OOD-rejected segments whose embedding structure deviates from the
+training distribution.
+
+\subsection{Active Learning and Hard-Example Mining}
+
+\noindent
+Over a typical deployment cycle, the three-band router routes $\approx 2$\% of segments into
+the uncertain band. Annotated corrections feed back into training, tightening both the classifier
+and the underlying corpus~\cite{Dumoulin}.
+
+\subsection{Discussion}
+
+\noindent
+The results demonstrate that the proposed pipeline represents a fundamental improvement over
+confidence-thresholded BirdNET for Indian PAM workflows. The dramatic FNR reduction
+(57.4\%$\to$0.04\%) has direct practical consequences: under the BirdNET baseline, more than
+half of genuine bird vocalisations are labeled as noise, systematically under-counting species
+richness. All components run on commodity CPU hardware, enabling edge deployment on low-power
+embedded recorders.
+
+% ======================================================
+% CHAPTER 5
+% ======================================================
+\newpage
+\thispagestyle{plain}
+
+\begin{center}
+{\fontsize{18}{20}\bfseries CHAPTER 5}
+\end{center}
+
+\addcontentsline{toc}{section}{\textbf{CHAPTER 5}}
+
+\vspace{0.5cm}
+
+\setcounter{section}{0}
+\renewcommand{\thesection}{5.\arabic{section}}
+
+\section{Conclusion}
+
+\noindent
+This project has presented a noise-aware machine-listening pipeline for Indian bird sound
+classification that combines six tightly coupled components: RMS silence rejection,
+subframe-level Noise Segregation V2 with harmonic Bird Guard checking, MLP-based Bird Rescue,
+frozen BirdNET V2.4 embeddings~\cite{BirdNET}, a focal-loss binary MLP classifier~\cite{FocalLoss},
+and a P99-thresholded autoencoder OOD rejection gate~\cite{Ntalampiras,Hinton}, together with a
+three-band confidence router and automated hard-example mining~\cite{Kath,Rauch}.
+
+\vspace{0.3cm}
+
+\noindent
+On the iBC53 corpus~\cite{iBC53} of 53 Indian species (10,044 three-second segments), the
+MLP-only pipeline raises accuracy from 0.440 to \textbf{0.999} and F1 from 0.598 to \textbf{1.000},
+reducing FNR from 57.4\% to 0.04\% and improving ROC-AUC from 0.724 to 0.998. Adding the
+autoencoder OOD gate yields accuracy 0.995 and F1 0.998 with robust OOD rejection. All improvements
+are statistically significant at $p < 0.05$.
+
+\vspace{0.3cm}
+
+\noindent
+These results confirm that a structured, noise-aware pipeline with domain-specific fine-tuning
+substantially outperforms single-threshold approaches in Indian PAM scenarios, and provides a
+practical foundation for field-deployable bioacoustic monitoring across India's diverse soundscapes.
+
+\section{Future Scope}
+
+\noindent
+The current system performs well in classifying bird sounds from Indian urban and peri-urban
+soundscapes, but there is meaningful scope to extend its applicability. One important direction
+is to evaluate and adapt the system across a wider variety of environmental conditions, including
+recordings from different geographical regions, seasonal periods, and recording hardware configurations.
+
+\vspace{0.3cm}
+
+\noindent
+Another area for improvement is expansion beyond binary bird-versus-noise classification to
+multi-species identification. Incorporating more labeled audio from underrepresented endemic
+species and acoustically challenging environments would reduce sensitivity to distribution shift.
+
+\vspace{0.3cm}
+
+\noindent
+The current implementation processes segments independently without exploiting temporal
+continuity. Incorporating temporal context --- via transformer-based audio encoders or recurrent
+classifiers --- could further improve performance on short or atypical calls. Making the Noise
+Segregation V2 feature weights learnable would make the noise segregation stage more transferable
+across regions and sensor types.
+
+\vspace{0.3cm}
+
+\noindent
+Finally, expanding the noise corpus with real-world recordings from diverse Indian environments
+would improve generalization of both the focal-loss MLP and the autoencoder OOD 
+
+% ======================================================
+% REFERENCES
+% ======================================================
+\newpage
+\thispagestyle{plain}
+
+\begin{center}
+{\fontsize{18}{20}\bfseries REFERENCES}
+\end{center}
+
+\addcontentsline{toc}{section}{\textbf{REFERENCES}}
+
+\vspace{0.5cm}
+
+\begin{thebibliography}{99}
+
+\bibitem{BirdNET}
+S.~Kahl, C.~M.~Wood, M.~Eibl, and H.~Klinck,
+``BirdNET: A deep learning solution for avian diversity monitoring,''
+\textit{Ecological Informatics}, vol.~61, p.~101236, 2021.
+
+\bibitem{WoodKahl}
+C.~M.~Wood and S.~Kahl,
+``Guidelines for appropriate use of BirdNET scores and other detector outputs,''
+\textit{Journal of Ornithology}, vol.~165, no.~3, pp.~777--782, 2024.
+
+\bibitem{iBC53}
+A.~Gupta, C.~S.~Swathi, A.~Jesudoss, A.~Shankar, and H.~Kumar,
+``A case study: Using passive acoustic monitoring devices in a growing urban landscape
+to monitor avian diversity,''
+\textit{bioRxiv preprint bioRxiv:2025.07.21.665881}, 2025.
+
+\bibitem{Stowell}
+D.~Stowell,
+``Computational bioacoustics with deep learning: a review and roadmap,''
+\textit{PeerJ}, vol.~10, p.~e13152, 2022.
+
+\bibitem{PerezGranados}
+C.~P\'erez-Granados and J.~C.~Seoane,
+``Hearing to the unseen: AudioMoth and BirdNET as a cheap and easy method for monitoring
+cryptic bird species,''
+\textit{Sensors}, vol.~23, no.~16, p.~7176, 2023.
+
+\bibitem{McGinn}
+K.~McGinn, S.~Kahl, M.~Z.~Peery, H.~Klinck, and C.~M.~Wood,
+``Feature embeddings from the BirdNET algorithm provide insights into avian ecology,''
+\textit{Ecological Informatics}, vol.~74, p.~101995, 2023.
+
+\bibitem{Ghani}
+B.~Ghani, T.~Denton, S.~Kahl, and H.~Klinck,
+``Global birdsong embeddings enable superior transfer learning for bioacoustic classification,''
+\textit{Scientific Reports}, vol.~13, no.~1, p.~22876, 2023.
+
+\bibitem{Muller}
+M.~M\"{u}ller \textit{et al.},
+``Impact of transfer learning methods and dataset characteristics on generalization in
+birdsong classification,''
+\textit{Scientific Reports}, vol.~15, no.~1, p.~16022, 2025.
+
+\bibitem{Xie}
+J.~Xie, J.~G.~Colonna, and J.~Zhang,
+``Bioacoustic signal denoising: a review,''
+\textit{Artificial Intelligence Review}, vol.~54, no.~5, pp.~3575--3597, 2021.
+
+\bibitem{Ntalampiras}
+S.~Ntalampiras and I.~Potamitis,
+``Acoustic detection of unknown bird species and individuals,''
+\textit{CAAI Transactions on Intelligence Technology}, vol.~6, no.~3, pp.~291--300, 2021.
+
+\bibitem{Hinton}
+G.~E.~Hinton and R.~R.~Salakhutdinov,
+``Reducing the dimensionality of data with neural networks,''
+\textit{Science}, vol.~313, no.~5786, pp.~504--507, 2006.
+
+\bibitem{Kath}
+H.~Kath, P.~P.~Serafini, I.~B.~Campos, T.~S.~Gouv\^ea, and D.~Sonntag,
+``Leveraging transfer learning and active learning for data annotation in passive acoustic
+monitoring of wildlife,''
+\textit{Ecological Informatics}, vol.~82, p.~102710, 2024.
+
+\bibitem{Rauch}
+L.~Rauch, D.~Huseljic, M.~Wirth, J.~Decke, B.~Sick, and C.~Scholz,
+``Towards deep active learning in avian bioacoustics,''
+\textit{arXiv preprint arXiv:2406.18621}, 2024.
+
+\bibitem{Dumoulin}
+V.~Dumoulin \textit{et al.},
+``The search for squawk: Agile modeling in bioacoustics,''
+\textit{arXiv preprint arXiv:2505.03071}, 2025.
+
+\bibitem{FocalLoss}
+T.-Y.~Lin, P.~Goyal, R.~Girshick, K.~He, and P.~Doll\'ar,
+``Focal loss for dense object detection,''
+in \textit{Proc.\ IEEE Int.\ Conf.\ Computer Vision (ICCV)}, 2017, pp.~2980--2988.
+
+\end{thebibliography}
+
+\end{document}

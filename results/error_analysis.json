@@ -1,13 +1,32 @@
 {
   "false_positives_topk": [
     {
-      "index": 9790,
+      "index": 6885,
+      "source_file": "data/processed/noise/Pomatorhinus ruficollis__2_seg0005.wav",
+      "species": "noise",
+      "y_true": 0,
+      "resolved_path": "data/processed/noise/Pomatorhinus ruficollis__2_seg0005.wav",
+      "mlp_prob": 0.9852821230888367,
+      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/false_positives/false_positives_06885_Pomatorhinus ruficollis__2_seg0005.wav",
+      "heuristics": {
+        "rms_db": -35.6654373980406,
+        "zcr": 0.22721338272094727,
+        "spectral_flatness_mean": 0.18661586940288544,
+        "low_freq_energy_ratio": 4.1405597365312395e-05,
+        "tags": [
+          "faint_rms"
+        ],
+        "periodicity_peak_ratio": 0.09650714695453644
+      }
+    },
+    {
+      "index": 6880,
       "source_file": "data/processed/noise/Locustella davidi__4_seg0003.wav",
       "species": "noise",
       "y_true": 0,
       "resolved_path": "data/processed/noise/Locustella davidi__4_seg0003.wav",
-      "mlp_prob": 0.9873506426811218,
-      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/false_positives/false_positives_09790_Locustella davidi__4_seg0003.wav",
+      "mlp_prob": 0.9746869206428528,
+      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/false_positives/false_positives_06880_Locustella davidi__4_seg0003.wav",
       "heuristics": {
         "rms_db": -39.93353647258129,
         "zcr": 0.3249744772911072,
@@ -21,162 +40,149 @@
       }
     },
     {
-      "index": 9793,
-      "source_file": "data/processed/noise/Pomatorhinus ruficollis__2_seg0005.wav",
+      "index": 6878,
+      "source_file": "data/processed/noise/Chloropsis jerdoni__13_seg0008.wav",
       "species": "noise",
       "y_true": 0,
-      "resolved_path": "data/processed/noise/Pomatorhinus ruficollis__2_seg0005.wav",
-      "mlp_prob": 0.9114919304847717,
-      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/false_positives/false_positives_09793_Pomatorhinus ruficollis__2_seg0005.wav",
+      "resolved_path": "data/processed/noise/Chloropsis jerdoni__13_seg0008.wav",
+      "mlp_prob": 0.963992178440094,
+      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/false_positives/false_positives_06878_Chloropsis jerdoni__13_seg0008.wav",
       "heuristics": {
-        "rms_db": -35.6654373980406,
-        "zcr": 0.22721338272094727,
-        "spectral_flatness_mean": 0.18661586940288544,
-        "low_freq_energy_ratio": 4.1405597365312395e-05,
+        "rms_db": -31.070448561265188,
+        "zcr": 0.2613212466239929,
+        "spectral_flatness_mean": 0.006326386705040932,
+        "low_freq_energy_ratio": 0.00013950737714390877,
+        "tags": [],
+        "periodicity_peak_ratio": 0.11487079411745071
+      }
+    },
+    {
+      "index": 6877,
+      "source_file": "data/processed/noise/Chloropsis jerdoni__13_seg0005.wav",
+      "species": "noise",
+      "y_true": 0,
+      "resolved_path": "data/processed/noise/Chloropsis jerdoni__13_seg0005.wav",
+      "mlp_prob": 0.9059261679649353,
+      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/false_positives/false_positives_06877_Chloropsis jerdoni__13_seg0005.wav",
+      "heuristics": {
+        "rms_db": -32.30477153412573,
+        "zcr": 0.2489878386259079,
+        "spectral_flatness_mean": 0.026211069896817207,
+        "low_freq_energy_ratio": 0.0014898635340865884,
+        "tags": [],
+        "periodicity_peak_ratio": 0.10883749276399612
+      }
+    },
+    {
+      "index": 6883,
+      "source_file": "data/processed/noise/Mystery mystery__419_seg0003.wav",
+      "species": "noise",
+      "y_true": 0,
+      "resolved_path": "data/processed/noise/Mystery mystery__419_seg0003.wav",
+      "mlp_prob": 0.7711057662963867,
+      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/false_positives/false_positives_06883_Mystery mystery__419_seg0003.wav",
+      "heuristics": {
+        "rms_db": -38.968900961053805,
+        "zcr": 0.2785019278526306,
+        "spectral_flatness_mean": 0.6969341039657593,
+        "low_freq_energy_ratio": 0.9880235355263642,
         "tags": [
+          "insect_like",
+          "wind_like",
+          "faint_rms",
+          "faint_periodic_candidate"
+        ],
+        "periodicity_peak_ratio": 0.7442479729652405
+      }
+    },
+    {
+      "index": 6881,
+      "source_file": "data/processed/noise/Mystery mystery__106_seg0002.wav",
+      "species": "noise",
+      "y_true": 0,
+      "resolved_path": "data/processed/noise/Mystery mystery__106_seg0002.wav",
+      "mlp_prob": 0.6943235993385315,
+      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/false_positives/false_positives_06881_Mystery mystery__106_seg0002.wav",
+      "heuristics": {
+        "rms_db": -39.58570390511828,
+        "zcr": 0.3482593595981598,
+        "spectral_flatness_mean": 0.0009485248010605574,
+        "low_freq_energy_ratio": 0.005776963809122469,
+        "tags": [
+          "faint_rms",
+          "faint_periodic_candidate"
+        ],
+        "periodicity_peak_ratio": 0.1541501134634018
+      }
+    },
+    {
+      "index": 6884,
+      "source_file": "data/processed/noise/Phylloscopus inornatus__4_seg0010.wav",
+      "species": "noise",
+      "y_true": 0,
+      "resolved_path": "data/processed/noise/Phylloscopus inornatus__4_seg0010.wav",
+      "mlp_prob": 0.6905076503753662,
+      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/false_positives/false_positives_06884_Phylloscopus inornatus__4_seg0010.wav",
+      "heuristics": {
+        "rms_db": -24.011726231613363,
+        "zcr": 0.30298125743865967,
+        "spectral_flatness_mean": 0.0007389553938992321,
+        "low_freq_energy_ratio": 3.610803852244572e-06,
+        "tags": [],
+        "periodicity_peak_ratio": 0.16790151596069336
+      }
+    },
+    {
+      "index": 6879,
+      "source_file": "data/processed/noise/Dicaeum chrysorrheum__1_seg0003.wav",
+      "species": "noise",
+      "y_true": 0,
+      "resolved_path": "data/processed/noise/Dicaeum chrysorrheum__1_seg0003.wav",
+      "mlp_prob": 0.6143124103546143,
+      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/false_positives/false_positives_06879_Dicaeum chrysorrheum__1_seg0003.wav",
+      "heuristics": {
+        "rms_db": -33.9832921369061,
+        "zcr": 0.18968187272548676,
+        "spectral_flatness_mean": 0.003608598140999675,
+        "low_freq_energy_ratio": 0.0010013284463021347,
+        "tags": [
+          "faint_periodic_candidate"
+        ],
+        "periodicity_peak_ratio": 0.15497535467147827
+      }
+    },
+    {
+      "index": 6882,
+      "source_file": "data/processed/noise/Mystery mystery__277_seg0004.wav",
+      "species": "noise",
+      "y_true": 0,
+      "resolved_path": "data/processed/noise/Mystery mystery__277_seg0004.wav",
+      "mlp_prob": 0.4320296049118042,
+      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/false_positives/false_positives_06882_Mystery mystery__277_seg0004.wav",
+      "heuristics": {
+        "rms_db": -38.500770168905646,
+        "zcr": 0.35179758071899414,
+        "spectral_flatness_mean": 0.31954461336135864,
+        "low_freq_energy_ratio": 0.007501799179313216,
+        "tags": [
+          "insect_like",
           "faint_rms"
         ],
-        "periodicity_peak_ratio": 0.09650714695453644
-      }
-    },
-    {
-      "index": 9791,
-      "source_file": "data/processed/noise/Mystery mystery__19_seg0006.wav",
-      "species": "noise",
-      "y_true": 0,
-      "resolved_path": "data/processed/noise/Mystery mystery__19_seg0006.wav",
-      "mlp_prob": 0.9048730731010437,
-      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/false_positives/false_positives_09791_Mystery mystery__19_seg0006.wav",
-      "heuristics": {
-        "rms_db": -61.26197978288361,
-        "zcr": 0.10529933869838715,
-        "spectral_flatness_mean": 0.20637837052345276,
-        "low_freq_energy_ratio": 0.9968113641290356,
-        "tags": [
-          "wind_like",
-          "faint_rms",
-          "faint_periodic_candidate"
-        ],
-        "periodicity_peak_ratio": 0.7553035020828247
-      }
-    },
-    {
-      "index": 9792,
-      "source_file": "data/processed/noise/Mystery mystery__336_seg0052.wav",
-      "species": "noise",
-      "y_true": 0,
-      "resolved_path": "data/processed/noise/Mystery mystery__336_seg0052.wav",
-      "mlp_prob": 0.5955630540847778,
-      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/false_positives/false_positives_09792_Mystery mystery__336_seg0052.wav",
-      "heuristics": {
-        "rms_db": -42.97080972552205,
-        "zcr": 0.21301189064979553,
-        "spectral_flatness_mean": 0.40002283453941345,
-        "low_freq_energy_ratio": 0.8392160187481693,
-        "tags": [
-          "wind_like",
-          "faint_rms",
-          "faint_periodic_candidate"
-        ],
-        "periodicity_peak_ratio": 0.44816887378692627
-      }
-    },
-    {
-      "index": 9848,
-      "source_file": "data/processed/noise/synth_brown_0034_seg0004.wav",
-      "species": "noise",
-      "y_true": 0,
-      "resolved_path": "data/processed/noise/synth_brown_0034_seg0004.wav",
-      "mlp_prob": 0.5441567897796631,
-      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/false_positives/false_positives_09848_synth_brown_0034_seg0004.wav",
-      "heuristics": {
-        "rms_db": -47.557120796382364,
-        "zcr": 0.004027805756777525,
-        "spectral_flatness_mean": 0.0014381605433300138,
-        "low_freq_energy_ratio": 0.9979559887240091,
-        "tags": [
-          "wind_like",
-          "faint_rms",
-          "faint_periodic_candidate"
-        ],
-        "periodicity_peak_ratio": 0.9376936554908752
+        "periodicity_peak_ratio": 0.06231458857655525
       }
     }
   ],
   "false_negatives_topk": [
     {
-      "index": 7991,
-      "source_file": "data/processed/Polyplectron bicalcaratum/11_seg0002.wav",
-      "species": "Polyplectron bicalcaratum",
-      "y_true": 1,
-      "resolved_path": "data/processed/Polyplectron bicalcaratum/11_seg0002.wav",
-      "ood": false,
-      "recon_error": 0.021598603576421738,
-      "mlp_prob": 0.43623435497283936,
-      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/false_negatives/false_negatives_07991_11_seg0002.wav",
-      "heuristics": {
-        "rms_db": -57.17881442637186,
-        "zcr": 0.07396578788757324,
-        "spectral_flatness_mean": 0.00027756523923017085,
-        "low_freq_energy_ratio": 0.25686649608534,
-        "tags": [
-          "faint_rms"
-        ],
-        "periodicity_peak_ratio": 0.06770474463701248
-      }
-    },
-    {
-      "index": 1138,
-      "source_file": "data/processed/Centropus andamanensis/16_seg0004.wav",
-      "species": "Centropus andamanensis",
-      "y_true": 1,
-      "resolved_path": "data/processed/Centropus andamanensis/16_seg0004.wav",
-      "ood": false,
-      "recon_error": 0.0185839906334877,
-      "mlp_prob": 0.46006831526756287,
-      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/false_negatives/false_negatives_01138_16_seg0004.wav",
-      "heuristics": {
-        "rms_db": -52.574305821902826,
-        "zcr": 0.13264675438404083,
-        "spectral_flatness_mean": 0.00020735473663080484,
-        "low_freq_energy_ratio": 0.05965756736823148,
-        "tags": [
-          "faint_rms"
-        ],
-        "periodicity_peak_ratio": 0.034484151750802994
-      }
-    },
-    {
-      "index": 1140,
-      "source_file": "data/processed/Centropus andamanensis/16_seg0006.wav",
-      "species": "Centropus andamanensis",
-      "y_true": 1,
-      "resolved_path": "data/processed/Centropus andamanensis/16_seg0006.wav",
-      "ood": false,
-      "recon_error": 0.016409408301115036,
-      "mlp_prob": 0.49472036957740784,
-      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/false_negatives/false_negatives_01140_16_seg0006.wav",
-      "heuristics": {
-        "rms_db": -52.524707456936724,
-        "zcr": 0.13386203348636627,
-        "spectral_flatness_mean": 0.0001856630842667073,
-        "low_freq_energy_ratio": 0.0599674404234275,
-        "tags": [
-          "faint_rms"
-        ],
-        "periodicity_peak_ratio": 0.035579510033130646
-      }
-    },
-    {
-      "index": 5695,
+      "index": 3919,
       "source_file": "data/processed/Mystery mystery/374_seg0005.wav",
       "species": "Mystery mystery",
       "y_true": 1,
       "resolved_path": "data/processed/Mystery mystery/374_seg0005.wav",
       "ood": false,
-      "recon_error": 0.029710276052355766,
-      "mlp_prob": 0.5019847750663757,
-      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/false_negatives/false_negatives_05695_374_seg0005.wav",
+      "recon_error": 0.03832045570015907,
+      "mlp_prob": 0.1268387734889984,
+      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/false_negatives/false_negatives_03919_374_seg0005.wav",
       "heuristics": {
         "rms_db": -39.20042273280492,
         "zcr": 0.11147993803024292,
@@ -191,122 +197,122 @@
       }
     },
     {
-      "index": 4819,
-      "source_file": "data/processed/Mystery mystery/24_seg0004.wav",
+      "index": 3921,
+      "source_file": "data/processed/Mystery mystery/374_seg0021.wav",
       "species": "Mystery mystery",
       "y_true": 1,
-      "resolved_path": "data/processed/Mystery mystery/24_seg0004.wav",
-      "ood": true,
-      "recon_error": 0.2372852861881256,
-      "mlp_prob": 0.9956732392311096,
-      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/false_negatives/false_negatives_04819_24_seg0004.wav",
+      "resolved_path": "data/processed/Mystery mystery/374_seg0021.wav",
+      "ood": false,
+      "recon_error": 0.029644738882780075,
+      "mlp_prob": 0.1441708356142044,
+      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/false_negatives/false_negatives_03921_374_seg0021.wav",
       "heuristics": {
-        "rms_db": -43.272459307120556,
-        "zcr": 0.1338689923286438,
-        "spectral_flatness_mean": 0.00227134651504457,
-        "low_freq_energy_ratio": 0.032884248364928016,
+        "rms_db": -38.34920514269315,
+        "zcr": 0.11775081604719162,
+        "spectral_flatness_mean": 0.002103454200550914,
+        "low_freq_energy_ratio": 0.9974558493419854,
         "tags": [
-          "faint_rms"
+          "wind_like",
+          "faint_rms",
+          "faint_periodic_candidate"
         ],
-        "periodicity_peak_ratio": 0.1258598268032074
+        "periodicity_peak_ratio": 0.8023117780685425
       }
     },
     {
-      "index": 7982,
-      "source_file": "data/processed/Polyplectron bicalcaratum/10_seg0000.wav",
-      "species": "Polyplectron bicalcaratum",
+      "index": 6767,
+      "source_file": "data/processed/Sturnia malabarica/4_seg0010.wav",
+      "species": "Sturnia malabarica",
       "y_true": 1,
-      "resolved_path": "data/processed/Polyplectron bicalcaratum/10_seg0000.wav",
-      "ood": true,
-      "recon_error": 0.23429155349731445,
-      "mlp_prob": 0.995130181312561,
-      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/false_negatives/false_negatives_07982_10_seg0000.wav",
+      "resolved_path": "data/processed/Sturnia malabarica/4_seg0010.wav",
+      "ood": false,
+      "recon_error": 0.1124398484826088,
+      "mlp_prob": 0.18318067491054535,
+      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/false_negatives/false_negatives_06767_4_seg0010.wav",
       "heuristics": {
-        "rms_db": -38.90445262546948,
-        "zcr": 0.12148348242044449,
-        "spectral_flatness_mean": 0.010642768815159798,
-        "low_freq_energy_ratio": 0.009219326958333985,
+        "rms_db": -37.487372959164645,
+        "zcr": 0.33562037348747253,
+        "spectral_flatness_mean": 0.00018892012303695083,
+        "low_freq_energy_ratio": 0.0017184707922240135,
+        "tags": [
+          "faint_rms"
+        ],
+        "periodicity_peak_ratio": 0.12341064214706421
+      }
+    },
+    {
+      "index": 6766,
+      "source_file": "data/processed/Sturnia malabarica/4_seg0009.wav",
+      "species": "Sturnia malabarica",
+      "y_true": 1,
+      "resolved_path": "data/processed/Sturnia malabarica/4_seg0009.wav",
+      "ood": false,
+      "recon_error": 0.12856605648994446,
+      "mlp_prob": 0.21320854127407074,
+      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/false_negatives/false_negatives_06766_4_seg0009.wav",
+      "heuristics": {
+        "rms_db": -35.09077446816527,
+        "zcr": 0.3503774404525757,
+        "spectral_flatness_mean": 0.0007569065201096237,
+        "low_freq_energy_ratio": 0.0008712440414824041,
         "tags": [
           "faint_rms",
           "faint_periodic_candidate"
         ],
-        "periodicity_peak_ratio": 0.503069281578064
+        "periodicity_peak_ratio": 0.19399580359458923
       }
     },
     {
-      "index": 7987,
-      "source_file": "data/processed/Polyplectron bicalcaratum/10_seg0005.wav",
-      "species": "Polyplectron bicalcaratum",
+      "index": 6769,
+      "source_file": "data/processed/Sturnia malabarica/4_seg0015.wav",
+      "species": "Sturnia malabarica",
       "y_true": 1,
-      "resolved_path": "data/processed/Polyplectron bicalcaratum/10_seg0005.wav",
-      "ood": true,
-      "recon_error": 0.22032272815704346,
-      "mlp_prob": 0.9975801706314087,
-      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/false_negatives/false_negatives_07987_10_seg0005.wav",
+      "resolved_path": "data/processed/Sturnia malabarica/4_seg0015.wav",
+      "ood": false,
+      "recon_error": 0.11574319005012512,
+      "mlp_prob": 0.22694477438926697,
+      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/false_negatives/false_negatives_06769_4_seg0015.wav",
       "heuristics": {
-        "rms_db": -34.31636143921824,
-        "zcr": 0.13735511898994446,
-        "spectral_flatness_mean": 0.00016968577983789146,
-        "low_freq_energy_ratio": 0.008669907006481873,
-        "tags": [
-          "faint_periodic_candidate"
-        ],
-        "periodicity_peak_ratio": 0.29097890853881836
+        "rms_db": -34.19052325267449,
+        "zcr": 0.32666894793510437,
+        "spectral_flatness_mean": 0.0002147598861483857,
+        "low_freq_energy_ratio": 0.0011468851073435224,
+        "tags": [],
+        "periodicity_peak_ratio": 0.13138002157211304
       }
     },
     {
-      "index": 175,
-      "source_file": "data/processed/Alcippe cinerea/11_seg0000.wav",
-      "species": "Alcippe cinerea",
+      "index": 6768,
+      "source_file": "data/processed/Sturnia malabarica/4_seg0012.wav",
+      "species": "Sturnia malabarica",
       "y_true": 1,
-      "resolved_path": "data/processed/Alcippe cinerea/11_seg0000.wav",
-      "ood": true,
-      "recon_error": 0.2086511254310608,
-      "mlp_prob": 0.9604151844978333,
-      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/false_negatives/false_negatives_00175_11_seg0000.wav",
+      "resolved_path": "data/processed/Sturnia malabarica/4_seg0012.wav",
+      "ood": false,
+      "recon_error": 0.11793047189712524,
+      "mlp_prob": 0.24051453173160553,
+      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/false_negatives/false_negatives_06768_4_seg0012.wav",
       "heuristics": {
-        "rms_db": -38.31955838818201,
-        "zcr": 0.28153321146965027,
-        "spectral_flatness_mean": 0.009938381612300873,
-        "low_freq_energy_ratio": 0.0005747761722955616,
+        "rms_db": -35.83310626181972,
+        "zcr": 0.2951965034008026,
+        "spectral_flatness_mean": 8.520622941432521e-05,
+        "low_freq_energy_ratio": 0.0017156321294005655,
         "tags": [
           "faint_rms",
           "faint_periodic_candidate"
         ],
-        "periodicity_peak_ratio": 0.20276887714862823
+        "periodicity_peak_ratio": 0.1632002294063568
       }
     },
     {
-      "index": 4780,
-      "source_file": "data/processed/Mystery mystery/245_seg0002.wav",
-      "species": "Mystery mystery",
-      "y_true": 1,
-      "resolved_path": "data/processed/Mystery mystery/245_seg0002.wav",
-      "ood": true,
-      "recon_error": 0.20429329574108124,
-      "mlp_prob": 0.9983069896697998,
-      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/false_negatives/false_negatives_04780_245_seg0002.wav",
-      "heuristics": {
-        "rms_db": -41.37676307846633,
-        "zcr": 0.08704227209091187,
-        "spectral_flatness_mean": 0.0010164041304960847,
-        "low_freq_energy_ratio": 0.03420984083069472,
-        "tags": [
-          "faint_rms"
-        ],
-        "periodicity_peak_ratio": 0.13092544674873352
-      }
-    },
-    {
-      "index": 8498,
+      "index": 5910,
       "source_file": "data/processed/Psilopogon lineatus/17_seg0004.wav",
       "species": "Psilopogon lineatus",
       "y_true": 1,
       "resolved_path": "data/processed/Psilopogon lineatus/17_seg0004.wav",
       "ood": true,
-      "recon_error": 0.2030973583459854,
-      "mlp_prob": 0.9816181063652039,
-      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/false_negatives/false_negatives_08498_17_seg0004.wav",
+      "recon_error": 0.2139185518026352,
+      "mlp_prob": 0.977260410785675,
+      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/false_negatives/false_negatives_05910_17_seg0004.wav",
       "heuristics": {
         "rms_db": -31.598614144061944,
         "zcr": 0.11214660853147507,
@@ -315,17 +321,80 @@
         "tags": [],
         "periodicity_peak_ratio": 0.17910882830619812
       }
+    },
+    {
+      "index": 3813,
+      "source_file": "data/processed/Mystery mystery/364_seg0009.wav",
+      "species": "Mystery mystery",
+      "y_true": 1,
+      "resolved_path": "data/processed/Mystery mystery/364_seg0009.wav",
+      "ood": true,
+      "recon_error": 0.20986923575401306,
+      "mlp_prob": 0.9650020003318787,
+      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/false_negatives/false_negatives_03813_364_seg0009.wav",
+      "heuristics": {
+        "rms_db": -36.01344376963135,
+        "zcr": 0.34166210889816284,
+        "spectral_flatness_mean": 0.0018826894229277968,
+        "low_freq_energy_ratio": 5.044880433522954e-06,
+        "tags": [
+          "faint_rms",
+          "faint_periodic_candidate"
+        ],
+        "periodicity_peak_ratio": 0.22133100032806396
+      }
+    },
+    {
+      "index": 3814,
+      "source_file": "data/processed/Mystery mystery/364_seg0012.wav",
+      "species": "Mystery mystery",
+      "y_true": 1,
+      "resolved_path": "data/processed/Mystery mystery/364_seg0012.wav",
+      "ood": true,
+      "recon_error": 0.20763783156871796,
+      "mlp_prob": 0.974741518497467,
+      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/false_negatives/false_negatives_03814_364_seg0012.wav",
+      "heuristics": {
+        "rms_db": -39.14458185922467,
+        "zcr": 0.36399558186531067,
+        "spectral_flatness_mean": 0.000605336856096983,
+        "low_freq_energy_ratio": 1.6862485752671172e-05,
+        "tags": [
+          "faint_rms",
+          "faint_periodic_candidate"
+        ],
+        "periodicity_peak_ratio": 0.21617606282234192
+      }
+    },
+    {
+      "index": 461,
+      "source_file": "data/processed/Arborophila torqueola/2_seg0028.wav",
+      "species": "Arborophila torqueola",
+      "y_true": 1,
+      "resolved_path": "data/processed/Arborophila torqueola/2_seg0028.wav",
+      "ood": true,
+      "recon_error": 0.2033165991306305,
+      "mlp_prob": 0.9443793296813965,
+      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/false_negatives/false_negatives_00461_2_seg0028.wav",
+      "heuristics": {
+        "rms_db": -25.96607809238759,
+        "zcr": 0.14736907184123993,
+        "spectral_flatness_mean": 5.252953997114673e-05,
+        "low_freq_energy_ratio": 0.003089600769575682,
+        "tags": [],
+        "periodicity_peak_ratio": 0.22018273174762726
+      }
     }
   ],
   "recovered_by_pipeline_topk": [
     {
-      "index": 9867,
+      "index": 6955,
       "source_file": "data/processed/noise/synth_insects_0012_seg0003.wav",
       "species": "noise",
       "y_true": 0,
       "resolved_path": "data/processed/noise/synth_insects_0012_seg0003.wav",
       "baseline_prob": 4.633554458618164,
-      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/recovered_by_pipeline/recovered_by_pipeline_09867_synth_insects_0012_seg0003.wav",
+      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/recovered_by_pipeline/recovered_by_pipeline_06955_synth_insects_0012_seg0003.wav",
       "heuristics": {
         "rms_db": -36.6485336471711,
         "zcr": 0.19870276749134064,
@@ -339,13 +408,13 @@
       }
     },
     {
-      "index": 9868,
+      "index": 6956,
       "source_file": "data/processed/noise/synth_insects_0012_seg0004.wav",
       "species": "noise",
       "y_true": 0,
       "resolved_path": "data/processed/noise/synth_insects_0012_seg0004.wav",
       "baseline_prob": 4.2600603103637695,
-      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/recovered_by_pipeline/recovered_by_pipeline_09868_synth_insects_0012_seg0004.wav",
+      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/recovered_by_pipeline/recovered_by_pipeline_06956_synth_insects_0012_seg0004.wav",
       "heuristics": {
         "rms_db": -36.69696703231506,
         "zcr": 0.20724450051784515,
@@ -359,13 +428,13 @@
       }
     },
     {
-      "index": 9866,
+      "index": 6954,
       "source_file": "data/processed/noise/synth_insects_0012_seg0002.wav",
       "species": "noise",
       "y_true": 0,
       "resolved_path": "data/processed/noise/synth_insects_0012_seg0002.wav",
       "baseline_prob": 3.948589324951172,
-      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/recovered_by_pipeline/recovered_by_pipeline_09866_synth_insects_0012_seg0002.wav",
+      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/recovered_by_pipeline/recovered_by_pipeline_06954_synth_insects_0012_seg0002.wav",
       "heuristics": {
         "rms_db": -36.550843996607306,
         "zcr": 0.19920971989631653,
@@ -379,13 +448,13 @@
       }
     },
     {
-      "index": 9865,
+      "index": 6953,
       "source_file": "data/processed/noise/synth_insects_0012_seg0001.wav",
       "species": "noise",
       "y_true": 0,
       "resolved_path": "data/processed/noise/synth_insects_0012_seg0001.wav",
       "baseline_prob": 3.9373810291290283,
-      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/recovered_by_pipeline/recovered_by_pipeline_09865_synth_insects_0012_seg0001.wav",
+      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/recovered_by_pipeline/recovered_by_pipeline_06953_synth_insects_0012_seg0001.wav",
       "heuristics": {
         "rms_db": -36.476202509893064,
         "zcr": 0.20349447429180145,
@@ -399,13 +468,13 @@
       }
     },
     {
-      "index": 9864,
+      "index": 6952,
       "source_file": "data/processed/noise/synth_insects_0012_seg0000.wav",
       "species": "noise",
       "y_true": 0,
       "resolved_path": "data/processed/noise/synth_insects_0012_seg0000.wav",
       "baseline_prob": 3.4637911319732666,
-      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/recovered_by_pipeline/recovered_by_pipeline_09864_synth_insects_0012_seg0000.wav",
+      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/recovered_by_pipeline/recovered_by_pipeline_06952_synth_insects_0012_seg0000.wav",
       "heuristics": {
         "rms_db": -36.43315270075343,
         "zcr": 0.20843200385570526,
@@ -419,149 +488,103 @@
       }
     },
     {
-      "index": 6008,
-      "source_file": "data/processed/Mystery mystery/425_seg0021.wav",
+      "index": 4076,
+      "source_file": "data/processed/Mystery mystery/423_seg0023.wav",
       "species": "Mystery mystery",
       "y_true": 1,
-      "resolved_path": "data/processed/Mystery mystery/425_seg0021.wav",
+      "resolved_path": "data/processed/Mystery mystery/423_seg0023.wav",
       "baseline_prob": 0.0,
-      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/recovered_by_pipeline/recovered_by_pipeline_06008_425_seg0021.wav",
+      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/recovered_by_pipeline/recovered_by_pipeline_04076_423_seg0023.wav",
       "heuristics": {
-        "rms_db": -34.74661695701879,
-        "zcr": 0.12325780093669891,
-        "spectral_flatness_mean": 0.003658936358988285,
-        "low_freq_energy_ratio": 0.0019286291873839673,
+        "rms_db": -38.94641507186995,
+        "zcr": 0.05571219325065613,
+        "spectral_flatness_mean": 0.44177740812301636,
+        "low_freq_energy_ratio": 0.3579176712344671,
         "tags": [
+          "faint_rms",
           "faint_periodic_candidate"
         ],
-        "periodicity_peak_ratio": 0.2573871612548828
+        "periodicity_peak_ratio": 0.3274485468864441
       }
     },
     {
-      "index": 6020,
-      "source_file": "data/processed/Mystery mystery/426_seg0010.wav",
+      "index": 4055,
+      "source_file": "data/processed/Mystery mystery/421_seg0004.wav",
       "species": "Mystery mystery",
       "y_true": 1,
-      "resolved_path": "data/processed/Mystery mystery/426_seg0010.wav",
+      "resolved_path": "data/processed/Mystery mystery/421_seg0004.wav",
       "baseline_prob": 0.0,
-      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/recovered_by_pipeline/recovered_by_pipeline_06020_426_seg0010.wav",
+      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/recovered_by_pipeline/recovered_by_pipeline_04055_421_seg0004.wav",
       "heuristics": {
-        "rms_db": -33.992792026750266,
-        "zcr": 0.1170702576637268,
-        "spectral_flatness_mean": 0.00700733857229352,
-        "low_freq_energy_ratio": 0.0009515325696475775,
-        "tags": [
-          "faint_periodic_candidate"
-        ],
-        "periodicity_peak_ratio": 0.17779777944087982
-      }
-    },
-    {
-      "index": 6019,
-      "source_file": "data/processed/Mystery mystery/426_seg0009.wav",
-      "species": "Mystery mystery",
-      "y_true": 1,
-      "resolved_path": "data/processed/Mystery mystery/426_seg0009.wav",
-      "baseline_prob": 0.0,
-      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/recovered_by_pipeline/recovered_by_pipeline_06019_426_seg0009.wav",
-      "heuristics": {
-        "rms_db": -34.97485406339874,
-        "zcr": 0.09705623239278793,
-        "spectral_flatness_mean": 0.0032729492522776127,
-        "low_freq_energy_ratio": 0.0018057462550054397,
+        "rms_db": -30.208864944499815,
+        "zcr": 0.15315383672714233,
+        "spectral_flatness_mean": 9.071331442100927e-05,
+        "low_freq_energy_ratio": 4.7870744670814386e-05,
         "tags": [],
-        "periodicity_peak_ratio": 0.12173239886760712
+        "periodicity_peak_ratio": 0.5263970494270325
       }
     },
     {
-      "index": 6018,
-      "source_file": "data/processed/Mystery mystery/426_seg0008.wav",
+      "index": 4054,
+      "source_file": "data/processed/Mystery mystery/421_seg0003.wav",
       "species": "Mystery mystery",
       "y_true": 1,
-      "resolved_path": "data/processed/Mystery mystery/426_seg0008.wav",
+      "resolved_path": "data/processed/Mystery mystery/421_seg0003.wav",
       "baseline_prob": 0.0,
-      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/recovered_by_pipeline/recovered_by_pipeline_06018_426_seg0008.wav",
+      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/recovered_by_pipeline/recovered_by_pipeline_04054_421_seg0003.wav",
       "heuristics": {
-        "rms_db": -38.82015080610424,
-        "zcr": 0.10485836863517761,
-        "spectral_flatness_mean": 0.0136207714676857,
-        "low_freq_energy_ratio": 0.0027081996610340835,
-        "tags": [
-          "faint_rms",
-          "faint_periodic_candidate"
-        ],
-        "periodicity_peak_ratio": 0.2584143579006195
+        "rms_db": -28.2790891794737,
+        "zcr": 0.14749407768249512,
+        "spectral_flatness_mean": 0.000101662844826933,
+        "low_freq_energy_ratio": 6.520087627258433e-05,
+        "tags": [],
+        "periodicity_peak_ratio": 0.2321205586194992
       }
     },
     {
-      "index": 6053,
-      "source_file": "data/processed/Mystery mystery/429_seg0012.wav",
+      "index": 4053,
+      "source_file": "data/processed/Mystery mystery/421_seg0002.wav",
       "species": "Mystery mystery",
       "y_true": 1,
-      "resolved_path": "data/processed/Mystery mystery/429_seg0012.wav",
+      "resolved_path": "data/processed/Mystery mystery/421_seg0002.wav",
       "baseline_prob": 0.0,
-      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/recovered_by_pipeline/recovered_by_pipeline_06053_429_seg0012.wav",
+      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/recovered_by_pipeline/recovered_by_pipeline_04053_421_seg0002.wav",
       "heuristics": {
-        "rms_db": -36.195782885841844,
-        "zcr": 0.11343134194612503,
-        "spectral_flatness_mean": 0.0008916702354326844,
-        "low_freq_energy_ratio": 0.0029568311048070945,
-        "tags": [
-          "faint_rms",
-          "faint_periodic_candidate"
-        ],
-        "periodicity_peak_ratio": 0.42600491642951965
+        "rms_db": -27.396416492839755,
+        "zcr": 0.1495427042245865,
+        "spectral_flatness_mean": 7.23575649317354e-05,
+        "low_freq_energy_ratio": 9.01410044927581e-05,
+        "tags": [],
+        "periodicity_peak_ratio": 0.2354830950498581
+      }
+    },
+    {
+      "index": 4052,
+      "source_file": "data/processed/Mystery mystery/421_seg0001.wav",
+      "species": "Mystery mystery",
+      "y_true": 1,
+      "resolved_path": "data/processed/Mystery mystery/421_seg0001.wav",
+      "baseline_prob": 0.0,
+      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/recovered_by_pipeline/recovered_by_pipeline_04052_421_seg0001.wav",
+      "heuristics": {
+        "rms_db": -28.09257251077439,
+        "zcr": 0.14745935797691345,
+        "spectral_flatness_mean": 0.00027994514675810933,
+        "low_freq_energy_ratio": 0.0006138207548363308,
+        "tags": [],
+        "periodicity_peak_ratio": 0.22358030080795288
       }
     }
   ],
   "rejected_by_autoencoder_topk": [
     {
-      "index": 4819,
-      "source_file": "data/processed/Mystery mystery/24_seg0004.wav",
-      "species": "Mystery mystery",
-      "y_true": 1,
-      "resolved_path": "data/processed/Mystery mystery/24_seg0004.wav",
-      "recon_error": 0.2372852861881256,
-      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/rejected_by_autoencoder/rejected_by_autoencoder_04819_24_seg0004.wav",
-      "heuristics": {
-        "rms_db": -43.272459307120556,
-        "zcr": 0.1338689923286438,
-        "spectral_flatness_mean": 0.00227134651504457,
-        "low_freq_energy_ratio": 0.032884248364928016,
-        "tags": [
-          "faint_rms"
-        ],
-        "periodicity_peak_ratio": 0.1258598268032074
-      }
-    },
-    {
-      "index": 7982,
-      "source_file": "data/processed/Polyplectron bicalcaratum/10_seg0000.wav",
-      "species": "Polyplectron bicalcaratum",
-      "y_true": 1,
-      "resolved_path": "data/processed/Polyplectron bicalcaratum/10_seg0000.wav",
-      "recon_error": 0.23429155349731445,
-      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/rejected_by_autoencoder/rejected_by_autoencoder_07982_10_seg0000.wav",
-      "heuristics": {
-        "rms_db": -38.90445262546948,
-        "zcr": 0.12148348242044449,
-        "spectral_flatness_mean": 0.010642768815159798,
-        "low_freq_energy_ratio": 0.009219326958333985,
-        "tags": [
-          "faint_rms",
-          "faint_periodic_candidate"
-        ],
-        "periodicity_peak_ratio": 0.503069281578064
-      }
-    },
-    {
-      "index": 9868,
+      "index": 6956,
       "source_file": "data/processed/noise/synth_insects_0012_seg0004.wav",
       "species": "noise",
       "y_true": 0,
       "resolved_path": "data/processed/noise/synth_insects_0012_seg0004.wav",
-      "recon_error": 0.22810021042823792,
-      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/rejected_by_autoencoder/rejected_by_autoencoder_09868_synth_insects_0012_seg0004.wav",
+      "recon_error": 0.23071232438087463,
+      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/rejected_by_autoencoder/rejected_by_autoencoder_06956_synth_insects_0012_seg0004.wav",
       "heuristics": {
         "rms_db": -36.69696703231506,
         "zcr": 0.20724450051784515,
@@ -575,32 +598,13 @@
       }
     },
     {
-      "index": 7987,
-      "source_file": "data/processed/Polyplectron bicalcaratum/10_seg0005.wav",
-      "species": "Polyplectron bicalcaratum",
-      "y_true": 1,
-      "resolved_path": "data/processed/Polyplectron bicalcaratum/10_seg0005.wav",
-      "recon_error": 0.22032272815704346,
-      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/rejected_by_autoencoder/rejected_by_autoencoder_07987_10_seg0005.wav",
-      "heuristics": {
-        "rms_db": -34.31636143921824,
-        "zcr": 0.13735511898994446,
-        "spectral_flatness_mean": 0.00016968577983789146,
-        "low_freq_energy_ratio": 0.008669907006481873,
-        "tags": [
-          "faint_periodic_candidate"
-        ],
-        "periodicity_peak_ratio": 0.29097890853881836
-      }
-    },
-    {
-      "index": 9864,
+      "index": 6952,
       "source_file": "data/processed/noise/synth_insects_0012_seg0000.wav",
       "species": "noise",
       "y_true": 0,
       "resolved_path": "data/processed/noise/synth_insects_0012_seg0000.wav",
-      "recon_error": 0.2098773717880249,
-      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/rejected_by_autoencoder/rejected_by_autoencoder_09864_synth_insects_0012_seg0000.wav",
+      "recon_error": 0.21571367979049683,
+      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/rejected_by_autoencoder/rejected_by_autoencoder_06952_synth_insects_0012_seg0000.wav",
       "heuristics": {
         "rms_db": -36.43315270075343,
         "zcr": 0.20843200385570526,
@@ -614,52 +618,13 @@
       }
     },
     {
-      "index": 175,
-      "source_file": "data/processed/Alcippe cinerea/11_seg0000.wav",
-      "species": "Alcippe cinerea",
-      "y_true": 1,
-      "resolved_path": "data/processed/Alcippe cinerea/11_seg0000.wav",
-      "recon_error": 0.2086511254310608,
-      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/rejected_by_autoencoder/rejected_by_autoencoder_00175_11_seg0000.wav",
-      "heuristics": {
-        "rms_db": -38.31955838818201,
-        "zcr": 0.28153321146965027,
-        "spectral_flatness_mean": 0.009938381612300873,
-        "low_freq_energy_ratio": 0.0005747761722955616,
-        "tags": [
-          "faint_rms",
-          "faint_periodic_candidate"
-        ],
-        "periodicity_peak_ratio": 0.20276887714862823
-      }
-    },
-    {
-      "index": 4780,
-      "source_file": "data/processed/Mystery mystery/245_seg0002.wav",
-      "species": "Mystery mystery",
-      "y_true": 1,
-      "resolved_path": "data/processed/Mystery mystery/245_seg0002.wav",
-      "recon_error": 0.20429329574108124,
-      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/rejected_by_autoencoder/rejected_by_autoencoder_04780_245_seg0002.wav",
-      "heuristics": {
-        "rms_db": -41.37676307846633,
-        "zcr": 0.08704227209091187,
-        "spectral_flatness_mean": 0.0010164041304960847,
-        "low_freq_energy_ratio": 0.03420984083069472,
-        "tags": [
-          "faint_rms"
-        ],
-        "periodicity_peak_ratio": 0.13092544674873352
-      }
-    },
-    {
-      "index": 8498,
+      "index": 5910,
       "source_file": "data/processed/Psilopogon lineatus/17_seg0004.wav",
       "species": "Psilopogon lineatus",
       "y_true": 1,
       "resolved_path": "data/processed/Psilopogon lineatus/17_seg0004.wav",
-      "recon_error": 0.2030973583459854,
-      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/rejected_by_autoencoder/rejected_by_autoencoder_08498_17_seg0004.wav",
+      "recon_error": 0.2139185518026352,
+      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/rejected_by_autoencoder/rejected_by_autoencoder_05910_17_seg0004.wav",
       "heuristics": {
         "rms_db": -31.598614144061944,
         "zcr": 0.11214660853147507,
@@ -670,30 +635,73 @@
       }
     },
     {
-      "index": 8487,
-      "source_file": "data/processed/Psilopogon lineatus/16_seg0000.wav",
-      "species": "Psilopogon lineatus",
+      "index": 3813,
+      "source_file": "data/processed/Mystery mystery/364_seg0009.wav",
+      "species": "Mystery mystery",
       "y_true": 1,
-      "resolved_path": "data/processed/Psilopogon lineatus/16_seg0000.wav",
-      "recon_error": 0.2016814798116684,
-      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/rejected_by_autoencoder/rejected_by_autoencoder_08487_16_seg0000.wav",
+      "resolved_path": "data/processed/Mystery mystery/364_seg0009.wav",
+      "recon_error": 0.20986923575401306,
+      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/rejected_by_autoencoder/rejected_by_autoencoder_03813_364_seg0009.wav",
       "heuristics": {
-        "rms_db": -30.119670067722566,
-        "zcr": 0.09588608145713806,
-        "spectral_flatness_mean": 0.006659453734755516,
-        "low_freq_energy_ratio": 0.0035864620255675996,
-        "tags": [],
-        "periodicity_peak_ratio": 0.4361729621887207
+        "rms_db": -36.01344376963135,
+        "zcr": 0.34166210889816284,
+        "spectral_flatness_mean": 0.0018826894229277968,
+        "low_freq_energy_ratio": 5.044880433522954e-06,
+        "tags": [
+          "faint_rms",
+          "faint_periodic_candidate"
+        ],
+        "periodicity_peak_ratio": 0.22133100032806396
       }
     },
     {
-      "index": 9867,
+      "index": 3814,
+      "source_file": "data/processed/Mystery mystery/364_seg0012.wav",
+      "species": "Mystery mystery",
+      "y_true": 1,
+      "resolved_path": "data/processed/Mystery mystery/364_seg0012.wav",
+      "recon_error": 0.20763783156871796,
+      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/rejected_by_autoencoder/rejected_by_autoencoder_03814_364_seg0012.wav",
+      "heuristics": {
+        "rms_db": -39.14458185922467,
+        "zcr": 0.36399558186531067,
+        "spectral_flatness_mean": 0.000605336856096983,
+        "low_freq_energy_ratio": 1.6862485752671172e-05,
+        "tags": [
+          "faint_rms",
+          "faint_periodic_candidate"
+        ],
+        "periodicity_peak_ratio": 0.21617606282234192
+      }
+    },
+    {
+      "index": 6953,
+      "source_file": "data/processed/noise/synth_insects_0012_seg0001.wav",
+      "species": "noise",
+      "y_true": 0,
+      "resolved_path": "data/processed/noise/synth_insects_0012_seg0001.wav",
+      "recon_error": 0.20660629868507385,
+      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/rejected_by_autoencoder/rejected_by_autoencoder_06953_synth_insects_0012_seg0001.wav",
+      "heuristics": {
+        "rms_db": -36.476202509893064,
+        "zcr": 0.20349447429180145,
+        "spectral_flatness_mean": 1.2000479728158098e-05,
+        "low_freq_energy_ratio": 0.00027900415856875585,
+        "tags": [
+          "faint_rms",
+          "faint_periodic_candidate"
+        ],
+        "periodicity_peak_ratio": 0.7440564036369324
+      }
+    },
+    {
+      "index": 6955,
       "source_file": "data/processed/noise/synth_insects_0012_seg0003.wav",
       "species": "noise",
       "y_true": 0,
       "resolved_path": "data/processed/noise/synth_insects_0012_seg0003.wav",
-      "recon_error": 0.20152927935123444,
-      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/rejected_by_autoencoder/rejected_by_autoencoder_09867_synth_insects_0012_seg0003.wav",
+      "recon_error": 0.2046477198600769,
+      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/rejected_by_autoencoder/rejected_by_autoencoder_06955_synth_insects_0012_seg0003.wav",
       "heuristics": {
         "rms_db": -36.6485336471711,
         "zcr": 0.19870276749134064,
@@ -704,6 +712,60 @@
           "faint_periodic_candidate"
         ],
         "periodicity_peak_ratio": 0.7381116151809692
+      }
+    },
+    {
+      "index": 461,
+      "source_file": "data/processed/Arborophila torqueola/2_seg0028.wav",
+      "species": "Arborophila torqueola",
+      "y_true": 1,
+      "resolved_path": "data/processed/Arborophila torqueola/2_seg0028.wav",
+      "recon_error": 0.2033165991306305,
+      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/rejected_by_autoencoder/rejected_by_autoencoder_00461_2_seg0028.wav",
+      "heuristics": {
+        "rms_db": -25.96607809238759,
+        "zcr": 0.14736907184123993,
+        "spectral_flatness_mean": 5.252953997114673e-05,
+        "low_freq_energy_ratio": 0.003089600769575682,
+        "tags": [],
+        "periodicity_peak_ratio": 0.22018273174762726
+      }
+    },
+    {
+      "index": 6954,
+      "source_file": "data/processed/noise/synth_insects_0012_seg0002.wav",
+      "species": "noise",
+      "y_true": 0,
+      "resolved_path": "data/processed/noise/synth_insects_0012_seg0002.wav",
+      "recon_error": 0.20329052209854126,
+      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/rejected_by_autoencoder/rejected_by_autoencoder_06954_synth_insects_0012_seg0002.wav",
+      "heuristics": {
+        "rms_db": -36.550843996607306,
+        "zcr": 0.19920971989631653,
+        "spectral_flatness_mean": 3.804379593930207e-05,
+        "low_freq_energy_ratio": 0.00023722166915845485,
+        "tags": [
+          "faint_rms",
+          "faint_periodic_candidate"
+        ],
+        "periodicity_peak_ratio": 0.7312982678413391
+      }
+    },
+    {
+      "index": 2548,
+      "source_file": "data/processed/Glaucidium cuculoides/31_seg0088.wav",
+      "species": "Glaucidium cuculoides",
+      "y_true": 1,
+      "resolved_path": "data/processed/Glaucidium cuculoides/31_seg0088.wav",
+      "recon_error": 0.2000146359205246,
+      "copied_to": "/media/samarth/DataFiles/PORTFOLIO PROJECTS/BirdNet/doomed after 2 messes/Noise-Aware-Pipeline-for-Indian-Bird-Sound-Classification/results/error_samples/rejected_by_autoencoder/rejected_by_autoencoder_02548_31_seg0088.wav",
+      "heuristics": {
+        "rms_db": -23.17525436403844,
+        "zcr": 0.07500052452087402,
+        "spectral_flatness_mean": 9.119611604546662e-06,
+        "low_freq_energy_ratio": 0.00742879132475267,
+        "tags": [],
+        "periodicity_peak_ratio": 0.24084533751010895
       }
     }
   ],
