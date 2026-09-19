@@ -1,18 +1,18 @@
 """
-Noise-Aware Bird Segregation Pipeline
+Noise-Aware Bird Segregation Pipeline V3
 
-A multi-stage pipeline for separating bird vocalizations from noise,
-designed to work upstream of BirdNET for species classification.
+A data-centric pipeline for false-positive suppression in passive acoustic
+monitoring. Designed to work upstream of BirdNET for species classification.
 
-Stages:
+Architecture:
     1. Audio Segmentation & Standardization
-    2. Deep Embedding Extraction (BirdNET, YAMNet, OpenL3)
-    3. Supervised Binary Classifier (Bird vs Noise)
-    4. Out-of-Distribution Detection
-    5. Source Separation Refinement (HPSS)
-    6. Temporal Consistency Modeling
-    7. Ensemble Decision Mechanism
-    8. Hard-Negative Mining
+    2. BirdNET Embedding Extraction (1024-d)
+    3. Hard-Negative Dataset Curation
+    4. Binary Classifier (Random Forest / MLP)
+    5. OOD Detection (Mahalanobis + Isolation Forest)
+    6. Active Learning / Expert-in-the-Loop Feedback
+    7. Post-Processing (Spectral + Temporal + Ecological)
+    8. Ensemble Decision & Final Output
 """
 
-__version__ = "2.0.0"
+__version__ = "3.0.0"

@@ -1,14 +1,23 @@
 """
-Stage 2: Deep Embedding Extraction
+Stage 2: BirdNET Embedding Extraction
 
-Extract high-dimensional feature embeddings from 3-second audio segments using
-multiple pretrained acoustic models: BirdNET, YAMNet, and OpenL3.
+Extract 1024-dimensional embeddings from 3-second audio segments using
+BirdNET's internal representation. Also compute per-segment BirdNET
+confidence scores for downstream pseudo-labeling.
+
+Output:
+    features/embeddings/embeddings.npy       (N × 1024)
+    features/embeddings/labels.npy           (species labels)
+    features/embeddings/paths.npy            (file paths)
+    features/embeddings/birdnet_confidences.npy  (max confidence per segment)
 """
 
 import os
 import glob
 import numpy as np
 import librosa
+import tempfile
+import soundfile as sf
 from tqdm import tqdm
 
 import sys
@@ -16,34 +25,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import config
 
 
-# ─── Lazy-loaded model singletons ────────────────────────────────────────────
-_yamnet_model = None
-_yamnet_params = None
-_openl3_model = None
+# ─── Lazy-loaded model singletons ───────────────────────────────────────────
 _birdnet_model = None
-
-
-def _load_yamnet():
-    """Load YAMNet model from TensorFlow Hub (lazy)."""
-    global _yamnet_model, _yamnet_params
-    if _yamnet_model is None:
-        import tensorflow_hub as hub
-        import tensorflow as tf
-        _yamnet_model = hub.load("https://tfhub.dev/google/yamnet/1")
-    return _yamnet_model
-
-
-def _load_openl3():
-    """Load OpenL3 model (lazy)."""
-    global _openl3_model
-    if _openl3_model is None:
-        import openl3
-        _openl3_model = openl3.models.load_audio_embedding_model(
-            input_repr="mel256",
-            content_type=config.OPENL3_CONTENT_TYPE,
-            embedding_size=config.OPENL3_EMBEDDING_SIZE,
-        )
-    return _openl3_model
 
 
 def _load_birdnet():
@@ -55,14 +38,14 @@ def _load_birdnet():
     return _birdnet_model
 
 
-# ─── Embedding Extractors ───────────────────────────────────────────────────
+# ─── Embedding Extraction ───────────────────────────────────────────────────
 
 def extract_birdnet_embedding(audio: np.ndarray, sr: int) -> np.ndarray:
     """
     Extract embeddings from BirdNET's internal representation.
 
-    Uses BirdNET to predict on a temporary file and extracts the confidence
-    vector as a proxy embedding.
+    Uses BirdNET to predict on a temporary file and extracts the species
+    probability vector as a proxy embedding (1024-d).
 
     Args:
         audio: Audio array (3 seconds at 48 kHz).
@@ -71,201 +54,49 @@ def extract_birdnet_embedding(audio: np.ndarray, sr: int) -> np.ndarray:
     Returns:
         1-D numpy embedding vector.
     """
-    import tempfile
-    import soundfile as sf
-
     model = _load_birdnet()
 
-    # Write a temp file since BirdNET takes file paths
+    # BirdNET API requires a file path — write temp file
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
-        sf.write(tmp.name, audio, sr)
         tmp_path = tmp.name
+        sf.write(tmp_path, audio, sr)
 
     try:
-        predictions = model.predict(tmp_path)
-        # Use the confidence scores as a feature vector
-        if predictions is not None and len(predictions) > 0:
-            embedding = predictions.iloc[:, 1].values.astype(np.float32)
-            # Pad/truncate to a fixed size for consistency
-            target_size = 100
-            if len(embedding) < target_size:
-                embedding = np.pad(embedding, (0, target_size - len(embedding)))
-            else:
-                embedding = embedding[:target_size]
-        else:
-            embedding = np.zeros(100, dtype=np.float32)
+        # Get 1024-d embedding directly from the model
+        res = model.encode(tmp_path)
+        embedding = res._embeddings.squeeze()
+
+        # Fallback if empty
+        if not embedding.size:
+            embedding = np.zeros(config.EMBEDDING_DIM, dtype=np.float32)
+
+        # Pad or truncate to expected dimension
+        if len(embedding) < config.EMBEDDING_DIM:
+            embedding = np.pad(
+                embedding,
+                (0, config.EMBEDDING_DIM - len(embedding)),
+            )
+        elif len(embedding) > config.EMBEDDING_DIM:
+            embedding = embedding[: config.EMBEDDING_DIM]
+
+        return embedding
+
     finally:
         os.unlink(tmp_path)
 
-    return embedding
 
-
-def extract_yamnet_embedding(audio: np.ndarray, sr: int) -> np.ndarray:
+def extract_embeddings(audio: np.ndarray, sr: int) -> np.ndarray:
     """
-    Extract embeddings using YAMNet (Google, via TensorFlow Hub).
-
-    YAMNet expects 16 kHz mono audio as input and produces 1024-d embeddings.
-
-    Args:
-        audio: Audio array.
-        sr: Sample rate.
-
-    Returns:
-        1-D numpy embedding vector (mean-pooled over frames).
-    """
-    import tensorflow as tf
-
-    model = _load_yamnet()
-
-    # YAMNet expects 16 kHz input
-    if sr != 16000:
-        audio_16k = librosa.resample(audio, orig_sr=sr, target_sr=16000)
-    else:
-        audio_16k = audio
-
-    audio_16k = audio_16k.astype(np.float32)
-
-    # YAMNet returns: scores, embeddings, spectrogram
-    scores, embeddings, spectrogram = model(audio_16k)
-
-    # Mean-pool across time frames to get a single vector
-    embedding = np.mean(embeddings.numpy(), axis=0)
-    return embedding.astype(np.float32)
-
-
-def extract_openl3_embedding(audio: np.ndarray, sr: int) -> np.ndarray:
-    """
-    Extract embeddings using OpenL3.
-
-    Args:
-        audio: Audio array.
-        sr: Sample rate.
-
-    Returns:
-        1-D numpy embedding vector (mean-pooled over frames).
-    """
-    import openl3
-
-    model = _load_openl3()
-
-    emb, ts = openl3.get_audio_embedding(
-        audio,
-        sr,
-        model=model,
-        hop_size=0.5,
-        verbose=False,
-    )
-
-    # Mean-pool across time frames
-    embedding = np.mean(emb, axis=0)
-    return embedding.astype(np.float32)
-
-
-def extract_embeddings(
-    audio: np.ndarray,
-    sr: int,
-    model_names: list = None,
-) -> np.ndarray:
-    """
-    Extract and optionally fuse embeddings from multiple models.
+    Extract BirdNET embeddings from an audio segment.
 
     Args:
         audio: Audio array (3 seconds at target SR).
         sr: Sample rate.
-        model_names: List of model names to use. Defaults to config.EMBEDDING_MODELS.
 
     Returns:
-        1-D numpy array — either single-model embedding or concatenated fusion.
+        1-D numpy array (1024-d BirdNET embedding).
     """
-    model_names = model_names or config.EMBEDDING_MODELS
-
-    extractors = {
-        "birdnet": extract_birdnet_embedding,
-        "yamnet": extract_yamnet_embedding,
-        "openl3": extract_openl3_embedding,
-    }
-
-    embeddings = []
-    for name in model_names:
-        if name not in extractors:
-            raise ValueError(f"Unknown embedding model: {name}. Choose from {list(extractors.keys())}")
-        emb = extractors[name](audio, sr)
-        embeddings.append(emb)
-
-    if config.FUSE_EMBEDDINGS or len(embeddings) > 1:
-        return np.concatenate(embeddings)
-    else:
-        return embeddings[0]
-
-
-def batch_extract_from_directory(
-    segment_dir: str = None,
-    output_dir: str = None,
-    model_names: list = None,
-    max_files: int = None,
-) -> dict:
-    """
-    Extract embeddings for all segmented audio files in a directory tree.
-
-    Saves embeddings as .npy files and returns paths.
-
-    Args:
-        segment_dir: Root of segmented audio directory.
-        output_dir: Directory to save embedding .npy files.
-        model_names: Which embedding models to use.
-        max_files: Limit the number of files (for testing).
-
-    Returns:
-        Dict mapping relative paths to embedding file paths.
-    """
-    segment_dir = segment_dir or config.SEGMENTED_DIR
-    output_dir = output_dir or config.EMBEDDINGS_DIR
-    model_names = model_names or config.EMBEDDING_MODELS
-    os.makedirs(output_dir, exist_ok=True)
-
-    audio_files = glob.glob(os.path.join(segment_dir, "**", "*.wav"), recursive=True)
-    if max_files:
-        audio_files = audio_files[:max_files]
-
-    if not audio_files:
-        print(f"[Stage 2] No segment files found in {segment_dir}")
-        return {}
-
-    print(f"[Stage 2] Extracting embeddings for {len(audio_files)} segments using {model_names}")
-
-    results = {}
-    all_embeddings = []
-    all_labels = []
-    all_paths = []
-
-    for file_path in tqdm(audio_files, desc="[Stage 2] Embedding extraction"):
-        try:
-            y, sr = librosa.load(file_path, sr=config.TARGET_SR)
-            emb = extract_embeddings(y, sr, model_names)
-            all_embeddings.append(emb)
-
-            # Label = species subdir name
-            label = os.path.basename(os.path.dirname(file_path))
-            all_labels.append(label)
-            all_paths.append(file_path)
-        except Exception as e:
-            print(f"  [WARN] Failed to process {file_path}: {e}")
-            continue
-
-    if all_embeddings:
-        embeddings_array = np.stack(all_embeddings)
-        np.save(os.path.join(output_dir, "embeddings.npy"), embeddings_array)
-        np.save(os.path.join(output_dir, "labels.npy"), np.array(all_labels))
-        np.save(os.path.join(output_dir, "paths.npy"), np.array(all_paths))
-        print(f"[Stage 2] Saved {embeddings_array.shape} embeddings to {output_dir}")
-        results = {
-            "embeddings_path": os.path.join(output_dir, "embeddings.npy"),
-            "labels_path": os.path.join(output_dir, "labels.npy"),
-            "paths_path": os.path.join(output_dir, "paths.npy"),
-            "shape": embeddings_array.shape,
-        }
-
-    return results
+    return extract_birdnet_embedding(audio, sr)
 
 
 def get_birdnet_confidence(file_path: str) -> float:
@@ -280,14 +111,109 @@ def get_birdnet_confidence(file_path: str) -> float:
     Returns:
         Maximum confidence score (0.0–1.0). Returns 0.0 on failure.
     """
-    model = _load_birdnet()
     try:
-        predictions = model.predict(file_path)
-        if predictions is not None and len(predictions) > 0:
-            return float(predictions.iloc[:, 1].max())
+        model = _load_birdnet()
+        res = model.predict(file_path)
+        if hasattr(res, "_species_probs") and res._species_probs.size > 0:
+            return float(res._species_probs.max())
+        return 0.0
     except Exception:
-        pass
-    return 0.0
+        return 0.0
+
+
+def batch_extract_from_directory(
+    segment_dir: str = None,
+    output_dir: str = None,
+    max_files: int = None,
+) -> dict:
+    """
+    Extract BirdNET embeddings for all segmented audio files in a directory tree.
+
+    Saves embeddings, labels, paths, and BirdNET confidences as .npy files.
+
+    Args:
+        segment_dir: Root of segmented audio directory.
+        output_dir: Directory to save embeddings.
+        max_files: Optional limit on number of files to process.
+
+    Returns:
+        Dict with counts of processed files per species.
+    """
+    segment_dir = segment_dir or config.SEGMENTED_DIR
+    output_dir = output_dir or config.EMBEDDINGS_DIR
+
+    # Find all audio segments
+    audio_files = []
+    for ext in ("*.wav", "*.flac", "*.mp3"):
+        audio_files.extend(
+            glob.glob(os.path.join(segment_dir, "**", ext), recursive=True)
+        )
+
+    if not audio_files:
+        print(f"[Stage 2] No audio files found in {segment_dir}")
+        return {}
+
+    if max_files:
+        audio_files = audio_files[:max_files]
+
+    print(f"[Stage 2] Extracting BirdNET embeddings for {len(audio_files)} segments...")
+
+    all_embeddings = []
+    all_labels = []
+    all_paths = []
+    all_confidences = []
+    species_counts = {}
+
+    try:
+        for file_path in tqdm(audio_files, desc="[Stage 2] Embedding"):
+            species_name = os.path.basename(os.path.dirname(file_path))
+
+            try:
+                # Load audio
+                y, sr = librosa.load(file_path, sr=config.TARGET_SR)
+
+                # Extract embedding
+                embedding = extract_embeddings(y, sr)
+                all_embeddings.append(embedding)
+
+                # Get BirdNET confidence
+                confidence = get_birdnet_confidence(file_path)
+                all_confidences.append(confidence)
+
+                all_labels.append(species_name)
+                all_paths.append(file_path)
+
+                species_counts[species_name] = species_counts.get(species_name, 0) + 1
+
+            except Exception as e:
+                print(f"  [WARN] Failed on {file_path}: {e}")
+                continue
+    except KeyboardInterrupt:
+        print("\n[Stage 2] Interrupted by user! Saving progress so far...")
+
+    if not all_embeddings:
+        print("[Stage 2] No embeddings extracted. Exiting.")
+        return {}
+    
+    # Convert to arrays and save
+    embeddings_arr = np.array(all_embeddings, dtype=np.float32)
+    labels_arr = np.array(all_labels, dtype=object)
+    paths_arr = np.array(all_paths, dtype=object)
+    confs_arr = np.array(all_confidences, dtype=np.float32)
+
+    os.makedirs(output_dir, exist_ok=True)
+
+    np.save(os.path.join(output_dir, "embeddings.npy"), embeddings_arr)
+    np.save(os.path.join(output_dir, "labels.npy"), labels_arr)
+    np.save(os.path.join(output_dir, "paths.npy"), paths_arr)
+    np.save(os.path.join(output_dir, "birdnet_confidences.npy"), confs_arr)
+
+    print(f"[Stage 2] Saved {len(embeddings_arr)} embeddings ({embeddings_arr.shape})")
+    print(f"[Stage 2] Species: {len(species_counts)}")
+    print(f"[Stage 2] BirdNET confidence — mean: {confs_arr.mean():.3f}, "
+          f"std: {confs_arr.std():.3f}")
+
+    return species_counts
 
 
 if __name__ == "__main__":

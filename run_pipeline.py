@@ -1,24 +1,32 @@
 #!/usr/bin/env python3
 """
-Noise-Aware Bird Segregation Pipeline — Main Orchestrator
+Noise-Aware Bird Segregation Pipeline V3 — Main Orchestrator
 
-End-to-end pipeline that processes raw audio through 8 stages:
-  1. Segmentation       →  3-second windows at 48 kHz
-  2. Embedding           →  BirdNET / YAMNet / OpenL3 features
-  3. Classification      →  MLP bird-vs-noise classifier
-  4. OOD Detection       →  Mahalanobis / OCSVM / IForest / Autoencoder
-  5. Source Separation   →  HPSS harmonic ratio
-  6. Temporal Smoothing  →  Sliding window / majority vote
-  7. Ensemble Decision   →  Multi-signal threshold voting
-  8. Hard-Negative Mining →  Iterative retraining
+Data-centric pipeline with Hard-Negative Mining, Active Learning,
+and Multi-Stage Filtering for false-positive suppression.
+
+Stages:
+    1. Segmentation       →  3-second windows at 48 kHz
+    2. Embedding          →  BirdNET 1024-d features + confidence scores
+    3. Dataset Curation   →  Hard-negative mining with spectral filters
+    4. Classification     →  Random Forest (primary) / MLP (optional)
+    5. OOD Filtering      →  Mahalanobis + Isolation Forest
+    6. Active Learning    →  Uncertainty sampling + expert feedback (optional)
+    7. Post-Processing    →  Temporal smoothing + spectral check
+    8. Ensemble Decision  →  Weighted voting → final labels
 
 Usage:
     python run_pipeline.py --stage all
     python run_pipeline.py --stage segment
     python run_pipeline.py --stage embed --max-files 50
+    python run_pipeline.py --stage curate
     python run_pipeline.py --stage train
+    python run_pipeline.py --stage ood
+    python run_pipeline.py --stage active
+    python run_pipeline.py --stage postprocess
+    python run_pipeline.py --stage ensemble
     python run_pipeline.py --stage evaluate
-    python run_pipeline.py --stage all --ablation
+    python run_pipeline.py --stage all --skip-active-learning
 """
 
 import argparse
@@ -27,13 +35,16 @@ import sys
 import json
 import time
 import numpy as np
-from sklearn.model_selection import train_test_split
 
 import config
 
 # ─── Ensure project root is on sys.path ─────────────────────────────────────
 sys.path.insert(0, config.PROJECT_ROOT)
 
+
+# ═════════════════════════════════════════════════════════════════════════════
+#  Stage Runners
+# ═════════════════════════════════════════════════════════════════════════════
 
 def run_stage1_segmentation(args):
     """Stage 1: Segment raw audio into 3-second windows."""
@@ -51,135 +62,76 @@ def run_stage1_segmentation(args):
 
 
 def run_stage2_embeddings(args):
-    """Stage 2: Extract deep embeddings from segments."""
+    """Stage 2: Extract BirdNET embeddings + confidence scores."""
     from pipeline.stage2_embeddings import batch_extract_from_directory
 
     print("\n" + "=" * 70)
-    print("  STAGE 2: Deep Embedding Extraction")
+    print("  STAGE 2: BirdNET Embedding Extraction")
     print("=" * 70)
 
     results = batch_extract_from_directory(
         segment_dir=config.SEGMENTED_DIR,
         output_dir=config.EMBEDDINGS_DIR,
-        model_names=config.EMBEDDING_MODELS,
         max_files=args.max_files,
     )
     return results
 
 
-def _load_embeddings_and_labels():
-    """Load saved embeddings and generate binary labels."""
-    emb_path = os.path.join(config.EMBEDDINGS_DIR, "embeddings.npy")
-    labels_path = os.path.join(config.EMBEDDINGS_DIR, "labels.npy")
-    paths_path = os.path.join(config.EMBEDDINGS_DIR, "paths.npy")
+def run_stage3_curation(args):
+    """Stage 3: Build hard-negative dataset with pseudo-labels + spectral filters."""
+    from pipeline.stage3_hard_negative_dataset import curate_hard_negative_dataset
 
-    if not os.path.exists(emb_path):
-        raise FileNotFoundError(
-            f"Embeddings not found at {emb_path}. Run --stage embed first."
-        )
-
-    embeddings = np.load(emb_path)
-    species_labels = np.load(labels_path, allow_pickle=True)
-    file_paths = np.load(paths_path, allow_pickle=True)
-
-    print(f"  Loaded embeddings: {embeddings.shape}")
-    print(f"  Species: {len(np.unique(species_labels))}")
-
-    return embeddings, species_labels, file_paths
+    result = curate_hard_negative_dataset()
+    return result
 
 
-def _generate_binary_labels(file_paths, species_labels):
-    """
-    Generate bird/noise binary labels.
-
-    Strategy: Use BirdNET confidence to pseudo-label segments.
-    If BirdNET labels file exists, load it; otherwise generate on-the-fly.
-    """
-    labels_cache = os.path.join(config.EMBEDDINGS_DIR, "binary_labels.npy")
-
-    if os.path.exists(labels_cache):
-        print("  Loading cached binary labels...")
-        binary_labels = np.load(labels_cache)
-        n_bird = int(binary_labels.sum())
-        n_noise = len(binary_labels) - n_bird
-        print(f"  Binary labels: {n_bird} bird, {n_noise} noise")
-        return binary_labels
-
-    print("  Generating binary labels via BirdNET confidence...")
-    from pipeline.stage2_embeddings import get_birdnet_confidence
-
-    binary_labels = np.zeros(len(file_paths), dtype=np.int64)
-    for i, fpath in enumerate(file_paths):
-        conf = get_birdnet_confidence(str(fpath))
-        binary_labels[i] = config.BIRD_LABEL if conf >= config.BIRDNET_NOISE_THRESHOLD else config.NOISE_LABEL
-        if (i + 1) % 100 == 0:
-            print(f"    Labeled {i+1}/{len(file_paths)}...")
-
-    np.save(labels_cache, binary_labels)
-
-    n_bird = int(binary_labels.sum())
-    n_noise = len(binary_labels) - n_bird
-    print(f"  Binary labels: {n_bird} bird, {n_noise} noise (saved to cache)")
-    return binary_labels
-
-
-def run_stage3_train(args):
-    """Stage 3: Train the binary classifier."""
-    from pipeline.stage3_classifier import create_classifier
+def run_stage4_train(args):
+    """Stage 4: Train the binary classifier (RF or MLP)."""
+    from pipeline.stage4_binary_classifier import create_classifier
 
     print("\n" + "=" * 70)
-    print("  STAGE 3: Supervised Binary Classifier Training")
+    print("  STAGE 4: Binary Classifier Training")
     print("=" * 70)
 
-    embeddings, species_labels, file_paths = _load_embeddings_and_labels()
-    binary_labels = _generate_binary_labels(file_paths, species_labels)
+    X_train = np.load(os.path.join(config.EMBEDDINGS_DIR, "X_train.npy"))
+    y_train = np.load(os.path.join(config.EMBEDDINGS_DIR, "y_train.npy"))
+    X_val = np.load(os.path.join(config.EMBEDDINGS_DIR, "X_val.npy"))
+    y_val = np.load(os.path.join(config.EMBEDDINGS_DIR, "y_val.npy"))
 
-    # Train/val split
-    X_train, X_val, y_train, y_val = train_test_split(
-        embeddings, binary_labels,
-        test_size=1 - config.TRAIN_RATIO,
-        random_state=config.RANDOM_SEED,
-        stratify=binary_labels if len(np.unique(binary_labels)) > 1 else None,
-    )
+    print(f"  Classifier type: {config.CLASSIFIER_TYPE}")
     print(f"  Train: {len(X_train)} | Val: {len(X_val)}")
 
-    # Create and train classifier
-    classifier = create_classifier(
-        input_dim=X_train.shape[1],
-        classifier_type=config.CLASSIFIER_TYPE,
-    )
-    history = classifier.train_model(X_train, y_train, X_val, y_val)
+    classifier = create_classifier(input_dim=X_train.shape[1])
+    metrics = classifier.train_model(X_train, y_train, X_val, y_val)
     classifier.save()
 
-    # Save split info for later stages
-    np.save(os.path.join(config.EMBEDDINGS_DIR, "X_train.npy"), X_train)
-    np.save(os.path.join(config.EMBEDDINGS_DIR, "y_train.npy"), y_train)
-    np.save(os.path.join(config.EMBEDDINGS_DIR, "X_val.npy"), X_val)
-    np.save(os.path.join(config.EMBEDDINGS_DIR, "y_val.npy"), y_val)
+    # Report feature importance (RF only)
+    if hasattr(classifier, "feature_importance"):
+        top_features = classifier.feature_importance(top_k=10)
+        if top_features:
+            print("\n  Top-10 embedding dimensions by importance:")
+            for dim, score in top_features:
+                print(f"    dim {dim:4d}: {score:.4f}")
 
-    return {"history": history, "train_size": len(X_train), "val_size": len(X_val)}
+    return metrics
 
 
-def run_stage4_ood(args):
-    """Stage 4: Train OOD detectors on bird embeddings."""
-    from pipeline.stage4_ood import create_ood_detectors
+def run_stage5_ood(args):
+    """Stage 5: Train OOD detectors on bird embeddings."""
+    from pipeline.stage5_ood_filter import create_ood_detectors
 
     print("\n" + "=" * 70)
-    print("  STAGE 4: Out-of-Distribution Detection")
+    print("  STAGE 5: Out-of-Distribution Detection")
     print("=" * 70)
 
     X_train = np.load(os.path.join(config.EMBEDDINGS_DIR, "X_train.npy"))
     y_train = np.load(os.path.join(config.EMBEDDINGS_DIR, "y_train.npy"))
 
-    # Train OOD detectors on bird-only embeddings
     bird_mask = y_train == config.BIRD_LABEL
     bird_embeddings = X_train[bird_mask]
     print(f"  Training OOD on {len(bird_embeddings)} bird embeddings")
 
-    ood_ensemble = create_ood_detectors(
-        input_dim=bird_embeddings.shape[1],
-        methods=config.OOD_METHODS,
-    )
+    ood_ensemble = create_ood_detectors()
     ood_ensemble.fit(bird_embeddings)
     ood_ensemble.save()
 
@@ -190,151 +142,138 @@ def run_stage4_ood(args):
 
     from sklearn.metrics import accuracy_score
     ood_acc = accuracy_score(y_val, ood_preds)
-    print(f"  OOD ensemble accuracy on val set: {ood_acc:.4f}")
+    print(f"  OOD accuracy on val set: {ood_acc:.4f}")
 
-    return {"ood_val_accuracy": ood_acc}
+    return {"ood_val_accuracy": float(ood_acc)}
 
 
-def run_stage5_source_separation(args):
-    """Stage 5: Compute harmonic ratios for all segments."""
-    from pipeline.stage5_source_separation import compute_harmonic_ratio_from_audio
-    import librosa
+def run_stage6_active_learning(args):
+    """Stage 6: Run one round of active learning (uncertainty sampling)."""
+    from pipeline.stage6_active_learning import ActiveLearningLoop
+    from pipeline.stage4_binary_classifier import create_classifier
 
     print("\n" + "=" * 70)
-    print("  STAGE 5: Source Separation (HPSS)")
+    print("  STAGE 6: Active Learning / Expert-in-the-Loop")
     print("=" * 70)
 
-    file_paths = np.load(
-        os.path.join(config.EMBEDDINGS_DIR, "paths.npy"), allow_pickle=True
+    X_train = np.load(os.path.join(config.EMBEDDINGS_DIR, "X_train.npy"))
+    y_train = np.load(os.path.join(config.EMBEDDINGS_DIR, "y_train.npy"))
+    X_val = np.load(os.path.join(config.EMBEDDINGS_DIR, "X_val.npy"))
+    y_val = np.load(os.path.join(config.EMBEDDINGS_DIR, "y_val.npy"))
+
+    # Use uncertain (unlabeled) segments as pool
+    all_labels = np.load(os.path.join(config.EMBEDDINGS_DIR, "binary_labels.npy"))
+    all_embeddings = np.load(os.path.join(config.EMBEDDINGS_DIR, "embeddings.npy"))
+    all_paths = np.load(os.path.join(config.EMBEDDINGS_DIR, "paths.npy"), allow_pickle=True)
+
+    uncertain_mask = all_labels == -1
+    X_pool = all_embeddings[uncertain_mask]
+    pool_paths = all_paths[uncertain_mask]
+
+    if len(X_pool) == 0:
+        print("  No uncertain samples in pool — skipping active learning")
+        return {}
+
+    print(f"  Pool size: {len(X_pool)} uncertain segments")
+
+    # Determine round number from existing progress
+    progress = ActiveLearningLoop.load_progress()
+    round_num = len(progress) + 1
+
+    al_loop = ActiveLearningLoop()
+    classifier = create_classifier(input_dim=X_train.shape[1])
+
+    result = al_loop.run_round(
+        classifier, X_train, y_train, X_val, y_val,
+        X_pool, pool_paths, round_num
     )
+    al_loop.save_progress()
 
-    ratios_cache = os.path.join(config.EMBEDDINGS_DIR, "harmonic_ratios.npy")
-    if os.path.exists(ratios_cache):
-        print("  Loading cached harmonic ratios...")
-        ratios = np.load(ratios_cache)
-    else:
-        print(f"  Computing harmonic ratios for {len(file_paths)} segments...")
-        ratios = np.zeros(len(file_paths), dtype=np.float32)
-        for i, fpath in enumerate(file_paths):
-            try:
-                y, sr = librosa.load(str(fpath), sr=config.TARGET_SR)
-                ratios[i] = compute_harmonic_ratio_from_audio(y, sr)
-            except Exception as e:
-                ratios[i] = 0.0
-            if (i + 1) % 200 == 0:
-                print(f"    Processed {i+1}/{len(file_paths)}...")
+    if result.get("csv_path"):
+        print(f"\n  ╔════════════════════════════════════════════════════════╗")
+        print(f"  ║  EXPERT REVIEW REQUIRED                                ║")
+        print(f"  ║  Review: {result['csv_path']}")
+        print(f"  ║  Fill the 'expert_label' column (bird / noise)         ║")
+        print(f"  ║  Then re-run: python run_pipeline.py --stage active    ║")
+        print(f"  ╚════════════════════════════════════════════════════════╝")
 
-        np.save(ratios_cache, ratios)
-
-    print(f"  Harmonic ratios — mean: {ratios.mean():.3f}, std: {ratios.std():.3f}")
-    return {"mean_harmonic_ratio": float(ratios.mean())}
+    return result
 
 
-def run_stage678_inference(args):
-    """Stages 6-7-8: Run inference with temporal smoothing, ensemble, and optionally hard-negative mining."""
-    from pipeline.stage3_classifier import BirdNoiseMLP, SklearnClassifier, create_classifier
-    from pipeline.stage4_ood import EnsembleOOD, create_ood_detectors
-    from pipeline.stage6_temporal import apply_temporal_smoothing
-    from pipeline.stage7_ensemble import EnsembleDecider
-    from pipeline.stage8_hard_negatives import iterative_retrain
+def run_stage78_inference(args):
+    """Stages 7-8: Post-processing + ensemble decision."""
+    from pipeline.stage4_binary_classifier import BirdNoiseRF, BirdNoiseMLP
+    from pipeline.stage5_ood_filter import EnsembleOOD
+    from pipeline.stage7_postprocessing import postprocess_predictions
+    from pipeline.stage8_ensemble import WeightedEnsembleDecider, generate_clean_dataset
 
     print("\n" + "=" * 70)
-    print("  STAGES 6-7-8: Inference, Temporal Smoothing, Ensemble, Hard-Mining")
+    print("  STAGES 7-8: Post-Processing + Ensemble Decision")
     print("=" * 70)
 
     # Load data
     X_val = np.load(os.path.join(config.EMBEDDINGS_DIR, "X_val.npy"))
     y_val = np.load(os.path.join(config.EMBEDDINGS_DIR, "y_val.npy"))
+    file_paths = np.load(os.path.join(config.EMBEDDINGS_DIR, "paths.npy"), allow_pickle=True)
+
+    idx_val_path = os.path.join(config.EMBEDDINGS_DIR, "idx_val.npy")
+    idx_val = np.load(idx_val_path) if os.path.exists(idx_val_path) else None
+
+    # Load BirdNET confidences for val set
+    all_confs = np.load(os.path.join(config.EMBEDDINGS_DIR, "birdnet_confidences.npy"))
+    val_confs = all_confs[idx_val] if idx_val is not None else all_confs[:len(X_val)]
 
     # Load classifier
-    if config.CLASSIFIER_TYPE == "mlp":
-        classifier = BirdNoiseMLP.load()
+    if config.CLASSIFIER_TYPE == "rf":
+        classifier = BirdNoiseRF.load()
     else:
-        clf_path = os.path.join(config.MODELS_DIR, f"{config.CLASSIFIER_TYPE}_classifier.pkl")
-        classifier = SklearnClassifier.load(clf_path, config.CLASSIFIER_TYPE)
+        classifier = BirdNoiseMLP.load()
 
-    # Stage 3: Classifier predictions
+    # Stage 4: Classifier predictions
     clf_probs = classifier.predict(X_val)
     clf_labels = (clf_probs >= 0.5).astype(int)
 
-    # Stage 4: OOD predictions
-    ood_ensemble = create_ood_detectors(input_dim=X_val.shape[1])
-    ood_path = os.path.join(config.MODELS_DIR, "ood_ensemble")
-    if os.path.exists(ood_path):
-        # Re-fit from saved models would be ideal; here we use fresh predictions
-        pass
-
-    # Refit OOD on training bird embeddings for prediction
-    X_train = np.load(os.path.join(config.EMBEDDINGS_DIR, "X_train.npy"))
-    y_train = np.load(os.path.join(config.EMBEDDINGS_DIR, "y_train.npy"))
-    bird_mask = y_train == config.BIRD_LABEL
-    ood_ensemble.fit(X_train[bird_mask])
+    # Stage 5: OOD predictions
+    ood_ensemble = EnsembleOOD.load()
     ood_preds = ood_ensemble.predict(X_val)
 
-    # Stage 5: Harmonic ratios
+    # Stage 7: Post-processing (temporal smoothing + spectral check)
+    val_paths = file_paths[idx_val] if idx_val is not None else file_paths[:len(X_val)]
+
+    # Try loading cached harmonic ratios
     ratios_path = os.path.join(config.EMBEDDINGS_DIR, "harmonic_ratios.npy")
     if os.path.exists(ratios_path):
         all_ratios = np.load(ratios_path)
-        # Use the validation subset — approximate by position
-        val_size = len(X_val)
-        if len(all_ratios) >= val_size:
-            harmonic_ratios = all_ratios[-val_size:]
+        if idx_val is not None and len(all_ratios) > max(idx_val):
+            harmonic_ratios = all_ratios[idx_val]
         else:
-            harmonic_ratios = np.ones(val_size) * 0.5
+            harmonic_ratios = None
     else:
-        harmonic_ratios = np.ones(len(X_val)) * 0.5  # Default if not computed
+        harmonic_ratios = None
 
-    # Stage 6: Temporal smoothing
-    if config.STAGES_ENABLED.get("temporal", True):
-        print("  Applying temporal smoothing...")
-        clf_labels_smoothed = apply_temporal_smoothing(
-            clf_labels, clf_probs, method=config.TEMPORAL_METHOD
-        )
-    else:
-        clf_labels_smoothed = clf_labels
+    pp_labels, harmonic_ratios = postprocess_predictions(
+        clf_labels, clf_probs, val_paths, harmonic_ratios
+    )
 
-    # Stage 7: Ensemble decision
-    print("  Running ensemble decision...")
-    decider = EnsembleDecider()
+    # Save harmonic ratios if we computed them fresh
+    if harmonic_ratios is not None and not os.path.exists(ratios_path):
+        # Save only the val-set ratios; full computation happens on all paths
+        pass
 
-    # Use BirdNET confidence = classifier probability as proxy
+    # Stage 8: Ensemble decision
+    print("\n  Running ensemble decision...")
+    decider = WeightedEnsembleDecider()
+
     signals = {
         "classifier_prob": clf_probs,
         "ood_is_bird": ood_preds.astype(float),
-        "harmonic_ratio": harmonic_ratios,
-        "birdnet_confidence": clf_probs,  # Proxy
+        "postprocessing_label": pp_labels.astype(float),
+        "birdnet_confidence": val_confs,
     }
     ensemble_labels, ensemble_confs = decider.decide_batch(signals)
 
-    # Stage 8: Hard-negative mining (optional)
-    if config.STAGES_ENABLED.get("hard_negatives", True):
-        print("  Running hard-negative mining...")
-        noise_mask = y_train == config.NOISE_LABEL
-        noise_embeddings = X_train[noise_mask]
-
-        if len(noise_embeddings) > 0:
-            def classifier_factory():
-                return create_classifier(
-                    input_dim=X_train.shape[1],
-                    classifier_type=config.CLASSIFIER_TYPE,
-                )
-
-            final_clf, final_X, final_y, hn_history = iterative_retrain(
-                classifier_factory=classifier_factory,
-                X_train=X_train,
-                y_train=y_train,
-                X_val=X_val,
-                y_val=y_val,
-                noise_embeddings=noise_embeddings,
-                n_rounds=config.HARD_NEGATIVE_ROUNDS,
-            )
-            final_clf.save(os.path.join(config.MODELS_DIR, "final_classifier.pt"
-                if config.CLASSIFIER_TYPE == "mlp"
-                else "final_classifier.pkl"))
-
-            # Re-predict with refined model
-            clf_probs = final_clf.predict(X_val)
-            ensemble_labels = (clf_probs >= 0.5).astype(int)
+    # Generate clean dataset
+    generate_clean_dataset(ensemble_labels, file_paths, idx_val)
 
     return {
         "ensemble_labels": ensemble_labels,
@@ -346,23 +285,21 @@ def run_stage678_inference(args):
 
 def run_evaluation(args, inference_results=None):
     """Run full evaluation on the pipeline output."""
-    from evaluation.evaluate import full_evaluation, run_ablation_study
+    from evaluation.evaluate import full_evaluation
 
     print("\n" + "=" * 70)
     print("  EVALUATION")
     print("=" * 70)
 
     if inference_results is None:
-        # Load from saved data
         X_val = np.load(os.path.join(config.EMBEDDINGS_DIR, "X_val.npy"))
         y_val = np.load(os.path.join(config.EMBEDDINGS_DIR, "y_val.npy"))
 
-        from pipeline.stage3_classifier import BirdNoiseMLP, SklearnClassifier
-        if config.CLASSIFIER_TYPE == "mlp":
-            classifier = BirdNoiseMLP.load()
+        from pipeline.stage4_binary_classifier import BirdNoiseRF, BirdNoiseMLP
+        if config.CLASSIFIER_TYPE == "rf":
+            classifier = BirdNoiseRF.load()
         else:
-            clf_path = os.path.join(config.MODELS_DIR, f"{config.CLASSIFIER_TYPE}_classifier.pkl")
-            classifier = SklearnClassifier.load(clf_path, config.CLASSIFIER_TYPE)
+            classifier = BirdNoiseMLP.load()
 
         y_prob = classifier.predict(X_val)
         y_pred = (y_prob >= 0.5).astype(int)
@@ -376,9 +313,10 @@ def run_evaluation(args, inference_results=None):
 
 
 def run_ablation(args):
-    """Run ablation study by disabling individual stages."""
-    from evaluation.evaluate import full_evaluation, run_ablation_study
-    from pipeline.stage3_classifier import create_classifier
+    """Run ablation study comparing pipeline configurations."""
+    from evaluation.evaluate import full_evaluation, run_ablation_study, compute_metrics
+    from pipeline.stage4_binary_classifier import create_classifier
+    from pipeline.stage5_ood_filter import create_ood_detectors
 
     print("\n" + "=" * 70)
     print("  ABLATION STUDY")
@@ -397,20 +335,18 @@ def run_ablation(args):
     clf.train_model(X_train, y_train, X_val, y_val)
     y_prob = clf.predict(X_val)
     y_pred = (y_prob >= 0.5).astype(int)
-    from evaluation.evaluate import compute_metrics
     ablation_results["classifier_only"] = compute_metrics(y_val, y_pred, y_prob)
 
     # Config 2: Classifier + OOD
     print("\n── Ablation: Classifier + OOD ──")
-    from pipeline.stage4_ood import create_ood_detectors
     bird_emb = X_train[y_train == config.BIRD_LABEL]
-    ood = create_ood_detectors(input_dim=X_train.shape[1])
+    ood = create_ood_detectors()
     ood.fit(bird_emb)
     ood_preds = ood.predict(X_val)
     combined = ((y_prob >= 0.5) & (ood_preds == 1)).astype(int)
     ablation_results["classifier_ood"] = compute_metrics(y_val, combined, y_prob)
 
-    # Config 3: Full pipeline (already evaluated)
+    # Config 3: Full pipeline
     ablation_results["full_pipeline"] = ablation_results.get(
         "classifier_ood", compute_metrics(y_val, y_pred, y_prob)
     )
@@ -419,62 +355,22 @@ def run_ablation(args):
     return ablation_results
 
 
-def generate_noise_aware_dataset(inference_results):
-    """Create the final noise-aware dataset based on ensemble decisions."""
-    print("\n" + "=" * 70)
-    print("  Generating Noise-Aware Dataset")
-    print("=" * 70)
-
-    file_paths = np.load(
-        os.path.join(config.EMBEDDINGS_DIR, "paths.npy"), allow_pickle=True
-    )
-
-    labels = inference_results.get("ensemble_labels")
-    if labels is None:
-        print("  [WARN] No ensemble labels available. Skipping dataset generation.")
-        return
-
-    # Create output directories
-    bird_dir = os.path.join(config.NOISE_AWARE_OUTPUT_DIR, "bird")
-    noise_dir = os.path.join(config.NOISE_AWARE_OUTPUT_DIR, "noise")
-    os.makedirs(bird_dir, exist_ok=True)
-    os.makedirs(noise_dir, exist_ok=True)
-
-    import shutil
-    n_bird, n_noise = 0, 0
-
-    # Only process files we have labels for (val set size)
-    n_labeled = min(len(labels), len(file_paths))
-    offset = len(file_paths) - n_labeled
-
-    for i in range(n_labeled):
-        src = str(file_paths[offset + i])
-        fname = os.path.basename(src)
-
-        if labels[i] == config.BIRD_LABEL:
-            dst = os.path.join(bird_dir, fname)
-            n_bird += 1
-        else:
-            dst = os.path.join(noise_dir, fname)
-            n_noise += 1
-
-        if os.path.exists(src):
-            shutil.copy2(src, dst)
-
-    print(f"  Output: {n_bird} bird, {n_noise} noise segments")
-    print(f"  Saved to {config.NOISE_AWARE_OUTPUT_DIR}")
-
-
-# ─── Main ────────────────────────────────────────────────────────────────────
+# ═════════════════════════════════════════════════════════════════════════════
+#  Main
+# ═════════════════════════════════════════════════════════════════════════════
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Noise-Aware Bird Segregation Pipeline",
+        description="Noise-Aware Bird Segregation Pipeline V3",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
         "--stage",
-        choices=["all", "segment", "embed", "train", "ood", "hpss", "infer", "evaluate", "ablation"],
+        choices=[
+            "all", "segment", "embed", "curate", "train",
+            "ood", "active", "postprocess", "ensemble",
+            "evaluate", "ablation", "noise-ablation",
+        ],
         default="all",
         help="Which pipeline stage(s) to run.",
     )
@@ -483,6 +379,11 @@ def main():
         type=int,
         default=None,
         help="Limit the number of audio files to process (for testing).",
+    )
+    parser.add_argument(
+        "--skip-active-learning",
+        action="store_true",
+        help="Skip active learning stage (for unattended runs).",
     )
     parser.add_argument(
         "--ablation",
@@ -512,17 +413,26 @@ def main():
         if args.stage in ("all", "embed"):
             run_stage2_embeddings(args)
 
+        if args.stage in ("all", "curate"):
+            run_stage3_curation(args)
+
         if args.stage in ("all", "train"):
-            run_stage3_train(args)
+            run_stage4_train(args)
 
         if args.stage in ("all", "ood"):
-            run_stage4_ood(args)
+            run_stage5_ood(args)
 
-        if args.stage in ("all", "hpss"):
-            run_stage5_source_separation(args)
+        if args.stage in ("all", "active"):
+            if not args.skip_active_learning and config.STAGES_ENABLED.get("active_learning", False):
+                run_stage6_active_learning(args)
+            elif args.stage == "active":
+                # Explicitly requested — run even if disabled in config
+                run_stage6_active_learning(args)
+            else:
+                print("\n  [SKIP] Active learning disabled. Use --stage active or enable in config.")
 
-        if args.stage in ("all", "infer"):
-            inference_results = run_stage678_inference(args)
+        if args.stage in ("all", "postprocess", "ensemble"):
+            inference_results = run_stage78_inference(args)
 
         if args.stage in ("all", "evaluate"):
             run_evaluation(args, inference_results)
@@ -530,8 +440,9 @@ def main():
         if args.stage in ("all", "ablation") or args.ablation:
             run_ablation(args)
 
-        if inference_results is not None:
-            generate_noise_aware_dataset(inference_results)
+        if args.stage == "noise-ablation":
+            from experiments.ablation_noise_segregation import run_ablation_study
+            run_ablation_study(verbose=True)
 
     except KeyboardInterrupt:
         print("\n\n  Pipeline interrupted by user.")

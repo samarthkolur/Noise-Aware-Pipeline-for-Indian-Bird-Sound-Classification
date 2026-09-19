@@ -3,6 +3,9 @@ Stage 1: Audio Segmentation & Standardization
 
 Resample audio to 48 kHz, segment into fixed-length windows with optional
 overlap, and save segments for downstream processing.
+
+Input:  data/iBC53/<SpeciesName>/<recording>.wav
+Output: data/segmented/<SpeciesName>/<recording>_seg0000.wav  (3 sec each)
 """
 
 import os

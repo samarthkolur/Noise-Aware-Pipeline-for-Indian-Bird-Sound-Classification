@@ -1,0 +1,252 @@
+# CLAUDE.md
+
+# Project Operating Instructions
+
+This repository follows a documentation-first development workflow.
+
+The primary source of truth for the project is:
+
+> design.md
+
+`design.md` is the authoritative engineering context document and should always reflect the current state of the project.
+
+When information already exists in `design.md`, treat it as the canonical source rather than rediscovering it by inspecting the repository.
+
+`to_do.md`, when present, is a chronological action-item checklist derived from `design.md`'s Pending Tasks (§24) and Development Log (§28). It is a companion index, not a second source of truth: every item in it must be traceable to a `design.md` section, and it should be regenerated/updated alongside `design.md` rather than diverging from it.
+
+---
+
+# Primary Rules
+
+Before responding to any engineering request:
+
+1. Consult `design.md`.
+2. Determine the current project state.
+3. Treat documented decisions as authoritative unless explicitly told otherwise.
+4. Use `design.md` as the project's persistent engineering memory.
+5. Only inspect the repository when:
+   - information is missing,
+   - the user explicitly requests an audit,
+   - the documentation appears inconsistent,
+   - or repository validation is required.
+
+---
+
+# Development Workflow
+
+## Before Starting Any Work
+
+Before implementing any feature or modification:
+
+- Review the relevant sections of `design.md`.
+- Identify the current phase.
+- Identify the active milestone.
+- Review pending tasks.
+- Identify dependencies.
+- Determine whether the requested work belongs in the current roadmap.
+
+If the request belongs to a future milestone, explain why before proceeding.
+
+---
+
+## Beginning a New Phase
+
+When beginning a new project phase, update `design.md` with:
+
+- Current Phase
+- Current Milestone
+- Objectives
+- Planned Deliverables
+- Expected Repository Changes
+- Dependencies
+- Risks
+
+Do this before implementation whenever repository editing is available.
+
+---
+
+## During Development
+
+Whenever repository editing is available, update `design.md` alongside the code whenever you:
+
+- create files
+- delete files
+- rename files
+- move files
+- refactor modules
+- reorganize folders
+- introduce dependencies
+- remove dependencies
+- add libraries
+- modify environment variables
+- introduce external services
+- change architecture
+- make significant engineering decisions
+- complete milestones
+
+Documentation should evolve together with the implementation.
+
+Never postpone documentation until the end of development.
+
+If repository editing is unavailable, provide the required `design.md` updates as part of your response.
+
+---
+
+# Development Log
+
+After completing meaningful work, append a new Development Log entry containing:
+
+- Timestamp (logical project time)
+- Task completed
+- Files created
+- Files modified
+- Files deleted
+- Reason for change
+- Architectural decisions
+- Remaining work
+- Known issues
+- Recommended next task
+
+Never overwrite previous entries.
+
+Always append.
+
+---
+
+# Required Sections in design.md
+
+The document should contain, where applicable:
+
+1. Project Overview
+2. Architecture
+3. Repository Structure
+4. Technology Stack
+5. Design Decisions (DD-001, DD-002, ...)
+6. Dependencies
+7. Environment Variables
+8. External Integrations
+9. Infrastructure & Deployment
+10. Domain-Specific Components
+11. Current Phase
+12. Current Milestone
+13. Completed Milestones
+14. Pending Tasks
+15. Known Issues
+16. Technical Debt
+17. Future Improvements
+18. Development Log
+19. Current Repository State
+
+Projects may add additional sections when appropriate.
+
+---
+
+# Updating Existing Information
+
+Never recreate information already documented.
+
+Instead:
+
+- Update it
+- Extend it
+- Revise it
+
+Preserve historical context whenever practical.
+
+Treat `design.md` as a living engineering wiki rather than a generated report.
+
+---
+
+# End of Every Response
+
+When repository editing is available:
+
+1. Update `design.md`.
+2. Summarize the sections updated.
+3. Confirm that `design.md` reflects the latest project state.
+
+When repository editing is unavailable:
+
+1. Describe the required `design.md` changes.
+2. List the affected sections.
+
+---
+
+# Engineering Standards
+
+Prefer:
+
+- Production-quality implementations
+- Modular architecture
+- SOLID principles
+- Clean code
+- High cohesion
+- Low coupling
+- Reusable components
+- Scalable folder structures
+- Explicit documentation
+- Maintainable abstractions
+- Strong typing where appropriate
+- Automated testing where appropriate
+- Consistent linting and formatting
+
+Avoid:
+
+- Duplicate code
+- Temporary hacks
+- Magic numbers
+- Hidden dependencies
+- Monolithic modules
+- Premature optimization
+- Unnecessary complexity
+- Dead code
+- Inconsistent naming
+- Untracked architectural decisions
+
+---
+
+# ML / Research-Specific Standards
+
+Because this is a machine-learning research project, the following additional rules apply:
+
+- **Never overwrite trained model artifacts** — append a version suffix or place them in a timestamped subdirectory. Model artifacts are treated like committed code: destructive overwrites are not permitted.
+- **Reproduce before you modify** — before changing any training script, confirm the current script reproduces the numbers documented in `design.md §9` (Evaluation Metrics). If it cannot, document the discrepancy before touching the code.
+- **All metrics are held-out metrics** — a metric computed on training or validation data must be labelled explicitly. Never report train/val numbers as if they were test numbers in `design.md`.
+- **Synthetic data is opt-in, never the default** — any code path that generates synthetic training data must be gated behind an explicit `--allow-synthetic` flag or equivalent, and must log a clear warning when active.
+- **OOD thresholds are documented artifacts** — every threshold value (τ_AE, confidence bands) must be recorded in `design.md §15` alongside the dataset split and percentile it was derived from. A threshold is not a magic number.
+- **Dataset download scripts must be idempotent** — re-running `scripts/download_data.py` on an already-populated `data/` directory must be a no-op or a safe update, never a destructive re-download that discards existing files.
+- **Evaluation scripts must be separate from training scripts** — `train.py` and `evaluate.py` (or their equivalents) must not share mutable global state. An evaluation run must be reproducible given only a model artifact path and a data split manifest.
+
+---
+
+# Repository Audits
+
+Repository-wide audits are expensive.
+
+Only perform one when:
+
+- explicitly requested,
+- `design.md` is missing,
+- documentation appears inconsistent,
+- significant refactoring requires validation,
+- or repository integrity needs verification.
+
+Otherwise, trust `design.md`.
+
+---
+
+# Goal
+
+A new researcher or engineer should be able to understand:
+
+- what the project is,
+- why it exists,
+- how it is structured,
+- what decisions have been made,
+- where development currently stands,
+- what remains to be built,
+- and how to continue development,
+
+by reading only `design.md`, without needing to inspect the repository.
+
+They should also be able to reproduce the paper's reported numbers by following only the instructions in `design.md §10` (Delivery Plan) and `design.md §9` (Evaluation Metrics), without needing to read any source code first.

@@ -2,8 +2,8 @@
 Evaluation Module
 
 Compute classification metrics, generate visualizations (confusion matrix,
-ROC curve, PR curve), and run ablation studies comparing different pipeline
-configurations.
+ROC curve, PR curve), run ablation studies, and track active learning
+progress across pipeline configurations.
 """
 
 import os
@@ -53,7 +53,6 @@ def compute_metrics(y_true: np.ndarray, y_pred: np.ndarray, y_prob: np.ndarray =
         metrics["roc_auc"] = float(roc_auc_score(y_true, y_prob))
         metrics["pr_auc"] = float(average_precision_score(y_true, y_prob))
 
-    # Confusion matrix
     cm = confusion_matrix(y_true, y_pred)
     metrics["confusion_matrix"] = cm.tolist()
 
@@ -62,9 +61,9 @@ def compute_metrics(y_true: np.ndarray, y_pred: np.ndarray, y_prob: np.ndarray =
 
 def print_metrics(metrics: dict, title: str = "Evaluation Results"):
     """Print metrics in a readable format."""
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"  {title}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     for key, value in metrics.items():
         if key == "confusion_matrix":
             print(f"  Confusion Matrix:")
@@ -74,7 +73,7 @@ def print_metrics(metrics: dict, title: str = "Evaluation Results"):
             print(f"    Bird       {cm[1][0]:6d} {cm[1][1]:5d}")
         else:
             print(f"  {key:20s}: {value:.4f}")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
 
 def save_metrics(metrics: dict, filename: str = "metrics.json"):
@@ -167,6 +166,34 @@ def plot_pr_curve(y_true, y_prob, filename="pr_curve.png"):
     print(f"  [Eval] PR curve saved to {path}")
 
 
+def plot_active_learning_progress(progress: list, filename="al_progress.png"):
+    """Plot accuracy improvement across active learning rounds."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    if not progress:
+        return
+
+    rounds = [p["round"] for p in progress]
+    val_accs = [p.get("val_accuracy", 0) for p in progress]
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    ax.plot(rounds, val_accs, "o-", linewidth=2, markersize=8, label="Val Accuracy")
+    ax.set_xlabel("Active Learning Round", fontsize=12)
+    ax.set_ylabel("Accuracy", fontsize=12)
+    ax.set_title("Active Learning Progress", fontsize=14)
+    ax.legend(fontsize=11)
+    ax.grid(alpha=0.3)
+    plt.tight_layout()
+
+    os.makedirs(config.RESULTS_DIR, exist_ok=True)
+    path = os.path.join(config.RESULTS_DIR, filename)
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+    print(f"  [Eval] AL progress saved to {path}")
+
+
 def full_evaluation(
     y_true: np.ndarray,
     y_pred: np.ndarray,
@@ -189,15 +216,20 @@ def full_evaluation(
     print_metrics(metrics, title=f"Evaluation: {tag}")
     save_metrics(metrics, filename=f"{tag}_metrics.json")
 
-    # Classification report
     print(classification_report(y_true, y_pred, target_names=["Noise", "Bird"]))
 
-    # Plots
     plot_confusion_matrix(y_true, y_pred, filename=f"{tag}_confusion_matrix.png")
 
     if y_prob is not None and len(np.unique(y_true)) > 1:
         plot_roc_curve(y_true, y_prob, filename=f"{tag}_roc.png")
         plot_pr_curve(y_true, y_prob, filename=f"{tag}_pr.png")
+
+    # Plot active learning progress if available
+    al_progress_path = os.path.join(config.ACTIVE_LEARNING_DIR, "progress.json")
+    if os.path.exists(al_progress_path):
+        with open(al_progress_path) as f:
+            al_progress = json.load(f)
+        plot_active_learning_progress(al_progress, filename=f"{tag}_al_progress.png")
 
     return metrics
 
@@ -208,7 +240,6 @@ def run_ablation_study(results: dict):
 
     Args:
         results: Dict mapping config name to metrics dict.
-            e.g. {"baseline": {...}, "no_ood": {...}, "full": {...}}
     """
     import matplotlib
     matplotlib.use("Agg")
@@ -245,7 +276,6 @@ def run_ablation_study(results: dict):
     plt.close(fig)
     print(f"  [Eval] Ablation comparison saved to {path}")
 
-    # Save as JSON table
     save_metrics(results, "ablation_results.json")
 
 
