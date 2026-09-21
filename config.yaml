@@ -1,0 +1,95 @@
+# ==============================================================================
+# Noise-Aware Pipeline for Indian Bird Sound Classification — config.yaml
+#
+# Single entry point for all paths, hyperparameters, and thresholds (DD-004).
+# No magic numbers belong in source code — every tunable value lives here and
+# is loaded through pipeline/config.py's Pydantic model.
+# ==============================================================================
+
+random_seed: 42
+log_level: "INFO"
+
+paths:
+  data_dir: "data"
+  raw_data_dir: "data/iBC53"
+  segmented_dir: "data/segmented"
+  segments_dir: "data/segments"
+  manifest_path: "data/manifest.csv"
+  split_path: "data/split.csv"
+  embeddings_cache_path: "data/embeddings.h5"
+  artifacts_dir: "artifacts"
+  outputs_dir: "outputs"
+  birdnet_model_path: "models/BirdNET_GLOBAL_6K_V2.4_Model_FP32.tflite"
+
+audio:
+  target_sr: 48000
+  segment_length_s: 3.0
+  silence_db_threshold: -40.0
+
+# Noise Segregation V2 (§6.2). Weights are unvalidated hyperparameters
+# pending the ablation study — see design.md DD-007.
+noise_segregation:
+  n_subframes: 6
+  subframe_duration_s: 0.5
+  weights:
+    zcr: 0.25
+    spectral_flatness: 0.30
+    centroid_flag: 0.15
+    centroid_std: 0.15
+    insect_periodicity: 0.15
+  insect_band_hz: [3000, 8000]
+  # Absolute-scale normalization references (DD-016). Per-segment min-max
+  # normalization across only 6 subframes degenerates on homogeneous signals
+  # (a pure tone or stationary white noise has near-identical subframes, so
+  # float noise gets stretched to the full [0,1] range). These fixed
+  # references make each feature comparable across segments instead.
+  zcr_reference: 0.5
+  centroid_threshold_hz: 4000.0
+  centroid_std_reference_hz: 3000.0
+
+bird_guard:
+  harmonic_ratio_threshold: 0.3
+  peak_median_threshold: 3.0
+
+bird_rescue:
+  hidden_dims: [128, 64]
+  rescue_threshold: 0.5
+
+# DD-009: "tflite" is the paper-matching preferred backend; "tensorflow" is the
+# fallback used when tflite-runtime wheels are unavailable for the host platform.
+embedding:
+  backend: "tensorflow"
+  model_version: "2.4"
+  embedding_dim: 1024
+
+split:
+  train_ratio: 0.75
+  val_ratio: 0.15
+  test_ratio: 0.10
+
+mlp:
+  hidden_dims: [512, 256]
+  dropout: 0.3
+  focal_gamma: 2.0
+  focal_alpha: 0.25
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  batch_size: 64
+  max_epochs: 50
+  early_stop_patience: 7
+
+autoencoder:
+  bottleneck_dim: 128
+  hidden_dim: 512
+  ae_percentile: 99
+
+router:
+  tau_low: 0.30
+  tau_high: 0.70
+
+# DD-010: synthetic noise generation is opt-in, never a default. It exists
+# because a real iBC53 noise-class corpus is not available in this environment
+# (see design.md §25 Known Issues). Must log a warning whenever active.
+synthetic:
+  allow_synthetic_noise: false
+  noise_types: ["pink", "brown", "white", "band_limited"]

@@ -1,0 +1,32 @@
+{
+  "random_seed": 42,
+  "embedding_dim": 1024,
+  "tau_ae": 0.0005029645399190485,
+  "ae_percentile": 99.0,
+  "mlp_best_epoch": 4,
+  "mlp_best_val_f1": 1.0,
+  "ae_best_epoch": 49,
+  "ae_best_val_mse": 0.0002670973481144756,
+  "mlp_hyperparameters": {
+    "hidden_dims": [
+      512,
+      256
+    ],
+    "dropout": 0.3,
+    "focal_gamma": 2.0,
+    "focal_alpha": 0.25,
+    "learning_rate": 0.001,
+    "weight_decay": 0.0001,
+    "batch_size": 64,
+    "max_epochs": 50,
+    "early_stop_patience": 7
+  },
+  "autoencoder_hyperparameters": {
+    "bottleneck_dim": 128,
+    "hidden_dim": 512,
+    "ae_percentile": 99.0
+  },
+  "n_train": 757,
+  "n_val": 151,
+  "n_train_bird": 607
+}

@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# lint-staged equivalent for a pure-Python repo: ruff check + format on staged .py files.
+set -euo pipefail
+
+STAGED_PY=$(git diff --cached --name-only --diff-filter=ACM -- '*.py' || true)
+if [ -z "$STAGED_PY" ]; then
+    exit 0
+fi
+
+echo "$STAGED_PY" | xargs uv run ruff check
+echo "$STAGED_PY" | xargs uv run ruff format --check

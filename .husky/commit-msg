@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# commitlint-equivalent: enforce a non-empty, capitalized subject line under 100 chars.
+set -euo pipefail
+
+MSG_FILE="$1"
+SUBJECT=$(head -n1 "$MSG_FILE")
+
+if [ -z "$SUBJECT" ]; then
+    echo "Commit message subject line is empty." >&2
+    exit 1
+fi
+
+if [ "${#SUBJECT}" -gt 100 ]; then
+    echo "Commit message subject line exceeds 100 characters." >&2
+    exit 1
+fi

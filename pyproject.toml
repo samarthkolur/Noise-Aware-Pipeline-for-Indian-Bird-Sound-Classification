@@ -1,0 +1,71 @@
+[project]
+name = "noise-aware-birdnet"
+version = "1.0.0"
+description = "Noise-Aware Pipeline for Indian Bird Sound Classification (BirdNET embeddings + Focal-loss MLP + Autoencoder OOD gate)"
+requires-python = ">=3.11,<3.13"
+readme = "Readme.md"
+dependencies = [
+    "torch>=2.2",
+    "birdnet>=0.2.12",
+    "tensorflow>=2.15",
+    "numpy>=1.24",
+    "scipy>=1.11",
+    "scikit-learn>=1.3",
+    "librosa>=0.10",
+    "soundfile>=0.12",
+    "h5py>=3.10",
+    "PyYAML>=6.0",
+    "pydantic>=2.5",
+    "matplotlib>=3.7",
+    "pandas>=2.0",
+    "streamlit>=1.60",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "mypy>=1.8",
+    "ruff>=0.4",
+    "onnx>=1.15",
+    "onnxruntime>=1.17",
+    "onnxscript>=0.1",
+]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+warn_unused_ignores = true
+disallow_untyped_defs = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--cov=pipeline --cov-report=term-missing"
+markers = [
+    "slow: integration tests that invoke real BirdNET inference or full training runs",
+]
+
+[tool.coverage.run]
+source = ["pipeline"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["pipeline"]

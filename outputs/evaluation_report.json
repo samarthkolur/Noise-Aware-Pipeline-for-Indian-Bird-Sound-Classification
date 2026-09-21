@@ -1,0 +1,87 @@
+{
+  "scope_note": "Bird class = real 53-species Indian corpus (data/segmented). Noise class = SYNTHETIC (opt-in, DD-010) because no real iBC53 noise corpus is available in this environment. These numbers are NOT a paper Table I reproduction.",
+  "n_test": 101,
+  "birdnet_baseline": {
+    "accuracy": 0.6237623762376238,
+    "precision": 0.9387755102040817,
+    "recall": 0.5679012345679012,
+    "f1": 0.7076923076923077,
+    "fpr": 0.15,
+    "fnr": 0.43209876543209874,
+    "confusion_matrix": [
+      [
+        17,
+        3
+      ],
+      [
+        35,
+        46
+      ]
+    ],
+    "roc_auc": 0.8574074074074074,
+    "pr_auc": 0.9576338632903709
+  },
+  "mlp_only": {
+    "accuracy": 1.0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0,
+    "fpr": 0.0,
+    "fnr": 0.0,
+    "confusion_matrix": [
+      [
+        20,
+        0
+      ],
+      [
+        0,
+        81
+      ]
+    ],
+    "roc_auc": 1.0,
+    "pr_auc": 1.0000000000000002
+  },
+  "mlp_ae_gate": {
+    "accuracy": 0.9702970297029703,
+    "precision": 1.0,
+    "recall": 0.9629629629629629,
+    "f1": 0.9811320754716981,
+    "fpr": 0.0,
+    "fnr": 0.037037037037037035,
+    "confusion_matrix": [
+      [
+        20,
+        0
+      ],
+      [
+        3,
+        78
+      ]
+    ],
+    "roc_auc": 0.9712962962962963,
+    "pr_auc": 0.9926659332599927
+  },
+  "tau_ae": 0.0005029645399190485,
+  "significance_baseline_to_mlp": {
+    "t_statistic": 7.766431633476233,
+    "t_p_value": 7.1991928961679665e-12,
+    "wilcoxon_statistic": 0.0,
+    "wilcoxon_p_value": 7.074463098970675e-10,
+    "significant_at_0.05": true
+  },
+  "significance_mlp_to_gated": {
+    "t_statistic": -1.749635530559413,
+    "t_p_value": 0.08324894306972563,
+    "wilcoxon_statistic": 0.0,
+    "wilcoxon_p_value": 0.0832645166635504,
+    "significant_at_0.05": false
+  },
+  "three_band_router": {
+    "band_counts": {
+      "bird": 75,
+      "noise": 23,
+      "uncertain": 3
+    },
+    "uncertain_fraction": 0.0297029702970297
+  }
+}

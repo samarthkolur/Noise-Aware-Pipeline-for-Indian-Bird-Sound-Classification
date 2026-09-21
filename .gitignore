@@ -1,4 +1,6 @@
 venv/
+.venv/
+.claude/scheduled_tasks.lock
 data/
 models/
 output_model/
@@ -8,3 +10,20 @@ __pycache__/
 *.flac
 *.mp3
 .ipynb_checkpoints/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+
+# Artifacts (DD-015): config.json is committed, model weights are not.
+artifacts/*.pt
+artifacts/*.onnx
+artifacts/*.onnx.data
+
+# Outputs (DD-014): evaluation_report.json + plots/ are committed,
+# routed audio directories and per-run manifests are not.
+outputs/bird/
+outputs/uncertain/
+outputs/noise/
+outputs/review/
+outputs/manifest_results.csv
